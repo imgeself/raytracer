@@ -12,14 +12,14 @@ struct Ray {
 
 struct WorldIntersectionResult {
     float t = F32Max;
-    uint32_t hitMetarialIndex;
+    uint32_t hitMaterialIndex;
     Vector3 hitNormal;
 };
 
 bool 
 IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResult) {
     float hitTolerance = 0.001;
-    float minHitDistance = 0.0001;
+    float minHitDistance = 0.001;
     
     for (int planeIndex = 0; planeIndex < world->planeCount; ++planeIndex) {
         Plane plane = world->planes[planeIndex];
@@ -29,7 +29,7 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
             float hitDistance = (-plane.d - DotProduct(plane.normal, ray->origin)) / denom;
             if (hitDistance > minHitDistance && hitDistance < intersectionResult->t) {
                 intersectionResult->t = hitDistance;
-                intersectionResult->hitMetarialIndex = plane.metarialIndex;
+                intersectionResult->hitMaterialIndex = plane.materialIndex;
                 intersectionResult->hitNormal = plane.normal;
             }
         }
@@ -43,7 +43,7 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
         float c = DotProduct(centerToOrigin, centerToOrigin) - (sphere.radius * sphere.radius);
         float discriminant = b * b - 4 * a * c;
         float denom = 2 * a;
-        if (discriminant >= 0) {
+        if (discriminant > 0) {
             float tp = (-b + sqrtf(discriminant)) / denom;
             float tn = (-b - sqrtf(discriminant)) / denom;
             
@@ -54,7 +54,7 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
             
             if (hitDistance > minHitDistance && hitDistance < intersectionResult->t) {
                 intersectionResult->t = hitDistance;
-                intersectionResult->hitMetarialIndex = sphere.metarialIndex;
+                intersectionResult->hitMaterialIndex = sphere.materialIndex;
                 
                 Vector3 hitPosition = ray->origin + ray->direction * hitDistance;
                 intersectionResult->hitNormal = Normalize(hitPosition - sphere.position);
@@ -65,44 +65,44 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
     return intersectionResult->t < F32Max;
 }
 
+
+
 // Checks for word intersection. 
 // If there is, iterate through lights and calculate the sum of lights then add to the color.
 // This method of light blending not physically correct it all.
 // But its okay for our purposes now.
 Vector3 RaytraceWorld(World* world, Ray* ray) {
-    Vector3 result = world->metarials[0].color;
+    Vector3 result(0.0f, 0.0f, 0.0f);
+
+    Ray bounceRay = {};
+    bounceRay.origin = ray->origin;
+    bounceRay.direction = ray->direction;
+
+    Vector3 attenuation(1.0f, 1.0f, 1.0f);
+    for (uint32_t bounceIndex = 0; bounceIndex < 8; ++bounceIndex) {    
+	WorldIntersectionResult intersectionResult = {};
+	bool isIntersect = IntersectWorld(world, &bounceRay, &intersectionResult);
     
-    WorldIntersectionResult intersectionResult = {};
-    bool isIntersect = IntersectWorld(world, ray, &intersectionResult);
-    
-    if (isIntersect) {
-        Vector3 finalColor = Vector3(0.0f, 0.0f, 0.0f);
-        for (int lightIndex = 0; lightIndex < world->lightCount; ++lightIndex) {
-            Light light = world->lights[lightIndex];
-            
-            Vector3 hitPosition = ray->origin + ray->direction * intersectionResult.t;
-            Vector3 lightVector = Normalize(light.position - hitPosition);
-            float factor = DotProduct(lightVector, intersectionResult.hitNormal);
-            if (factor < 0.0001f) {
-                factor = 0.0001f;
-            }
-            Vector3 color = world->metarials[intersectionResult.hitMetarialIndex].color * factor;
-            
-            Ray shadowRay = {};
-            shadowRay.origin = hitPosition;
-            shadowRay.direction = lightVector;
-            
-            WorldIntersectionResult shadowIntersection = {};
-            bool isShadowIntersect = IntersectWorld(world, &shadowRay, &shadowIntersection);
-            if (isShadowIntersect) {
-                color = color * 0.1f;
-            }
-            
-            finalColor += color;
-        }
-        
-        result = finalColor / world->lightCount;
+	if (isIntersect) {
+	    Material mat = world->materials[intersectionResult.hitMaterialIndex];
+	    
+	    result = attenuation;
+	    attenuation *= mat.color;
+
+	    Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal * DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
+	    bounceRay.origin = bounceRay.origin + bounceRay.direction * intersectionResult.t;
+	    Vector3 randomBounce = intersectionResult.hitNormal + Vector3(RandomBilateral(), RandomBilateral(), RandomBilateral());
+	    bounceRay.direction = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
+	} else {
+	    // Hit nothing aka sky
+	    // We just return attenuation. No sky color or sky emmiter.
+	    Material mat = world->materials[intersectionResult.hitMaterialIndex];
+	    result = attenuation;
+	    break;
+	}
+	
     }
+
     
     return result;
 }
@@ -110,7 +110,7 @@ Vector3 RaytraceWorld(World* world, Ray* ray) {
 int main(int argc, char** argv) {
     Image image = CreateImage(1280, 720);
     float imageAspectRatio = (float) image.width / (float) image.height;
-    
+	
     // Y is up.
     const Vector3 globalUpVector = Vector3(0.0f, 1.0f, 0.0f);
 
@@ -118,71 +118,60 @@ int main(int argc, char** argv) {
     Plane plane = {};
     plane.normal = globalUpVector;
     plane.d = 0;
-    plane.metarialIndex = 1;
+    plane.materialIndex = 1;
     
     Sphere sphere = {};
     sphere.position = Vector3(0.0f, 1.0f, 0.0f);
     sphere.radius = 1.0f;
-    sphere.metarialIndex = 2;
-    
+    sphere.materialIndex = 2;
+
     Sphere sphere2 = {};
-    sphere2.position = Vector3(2.0f, 2.0f, 3.0f);
+    sphere2.position = Vector3(-2.0f, 1.0f, 0.0f);
     sphere2.radius = 1.0f;
-    sphere2.metarialIndex = 2;
-    
+    sphere2.materialIndex = 4;
+
     Sphere sphere3 = {};
-    sphere3.position = Vector3(-2.0f, 1.0f, 4.0f);
+    sphere3.position = Vector3(-4.0f, 2.0f, 1.0f);
     sphere3.radius = 1.0f;
-    sphere3.metarialIndex = 2;
+    sphere3.materialIndex = 3;
+   
     
     Sphere spheres[3];
     spheres[0] = sphere;
     spheres[1] = sphere2;
     spheres[2] = sphere3;
     
-    Metarial defaultMetarial = {};
-    defaultMetarial.color = Vector3(0.1f, 0.1f, 0.1f);
+    Material defaultMaterial = {};
+    defaultMaterial.color = Vector3(1.0f, 1.0f, 1.0f);
     
-    Metarial planeMetarial = {};
-    planeMetarial.color = Vector3(1.0f, 0.0f, 0.0f);
+    Material planeMaterial = {};
+    planeMaterial.color = Vector3(0.8f, 0.8f, 0.0f);
     
-    Metarial sphereMetarial = {};
-    sphereMetarial.color = Vector3(0.0f, 0.0f, 1.0f);
+    Material sphereMaterial = {};
+    sphereMaterial.color = Vector3(0.8f, 0.3f, 0.3f);
+
+    Material sphere2Material = {};
+    sphere2Material.color = Vector3(0.9f, 0.9f, 0.9f);
+    sphere2Material.reflection = 1.0f;
+
+    Material sphere3Material = {};
+    sphere3Material.color = Vector3(0.8f, 0.6f, 0.2f);
+    sphere3Material.reflection = 0.9f;
     
-    Metarial metarials[3] = {};
-    metarials[0] = defaultMetarial;
-    metarials[plane.metarialIndex] = planeMetarial;
-    metarials[sphere.metarialIndex] = sphereMetarial;
-    
-    Light light = {};
-    light.position = Vector3(2.0f, 3.0f, 8.0f);
-    light.color = Vector3(1.0f, 1.0f, 1.0f);
-    light.density = 1;
-    
-    Light light2 = {};
-    light2.position = Vector3(-2.0f, 3.0f, 3.0f);
-    light2.color = Vector3(1.0f, 1.0f, 1.0f);
-    light2.density = 1;
-    
-    Light light3 = {};
-    light3.position = Vector3(-3.0f, 3.0f, 5.0f);
-    light3.color = Vector3(1.0f, 1.0f, 1.0f);
-    light3.density = 1;
-    
-    Light lights[3] = {};
-    lights[0] = light;
-    lights[1] = light2;
-    lights[2] = light3;
+    Material materials[5] = {};
+    materials[0] = defaultMaterial;
+    materials[plane.materialIndex] = planeMaterial;
+    materials[sphere.materialIndex] = sphereMaterial;
+    materials[sphere2.materialIndex] = sphere2Material;
+    materials[sphere3.materialIndex] = sphere3Material;
     
     World world = {};
-    world.metarialCount = 2;
-    world.metarials = metarials;
+    world.materialCount = 5;
+    world.materials = materials;
     world.planeCount = 1;
     world.planes = &plane;
     world.sphereCount = 3;
     world.spheres = spheres;
-    world.lightCount = 3;
-    world.lights = lights;
     
     Vector3 cameraPosition = Vector3(0.0f, 1.0f, 10.0f);
     Vector3 cameraZ = Normalize(cameraPosition);
@@ -197,7 +186,8 @@ int main(int argc, char** argv) {
     
     float halfFilmWidth = filmWidth * 0.5f;
     float halfFilmHeight = filmHeight * 0.5f;
-    
+
+    uint32_t sampleSize = 32;
     uint32_t *frameBuffer = image.pixelData;  
     for (int32_t y = 0; y < image.height; ++y) {
         float filmY = ((float) y / (float) image.height) * -2.0f + 1.0f;
@@ -205,14 +195,17 @@ int main(int argc, char** argv) {
             float filmX = (((float) x / (float) image.width) * 2.0f - 1.0f);
             
             Vector3 filmPosition = filmCenter + cameraX * filmX * halfFilmWidth + cameraY * halfFilmHeight * filmY;
+
+	    Vector3 color(0.0f, 0.0f, 0.0f);
+	    for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
+		Ray ray = {};
+		ray.origin = cameraPosition;
+		ray.direction = Normalize(filmPosition - cameraPosition);
             
-            Ray ray = {};
-            ray.origin = cameraPosition;
-            ray.direction = Normalize(filmPosition - cameraPosition);
+		color += RaytraceWorld(&world, &ray);
+	    }
             
-            Vector3 color = RaytraceWorld(&world, &ray);
-            
-            *frameBuffer++ = RGBPackToUInt32(color);
+            *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
             
         }
     }

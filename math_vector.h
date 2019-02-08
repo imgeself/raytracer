@@ -14,6 +14,7 @@ struct Vector3 {
     Vector3 operator-();
     Vector3 operator=(const Vector3 v);
     Vector3 operator+=(const Vector3 v);
+    Vector3 operator*=(const Vector3 v);
     Vector3 operator-=(const Vector3 v);
     Vector3 operator/=(const Vector3 v);
     Vector3 operator-(const Vector3 v);
@@ -29,6 +30,9 @@ struct Vector3 {
     Vector3 operator+(const float factor);
     Vector3 operator-(const float factor);
     Vector3 operator/(const float factor);
+
+    bool operator==(const Vector3 v);
+    bool operator!=(const Vector3 v);
     
     float Lenght();
 };
@@ -67,6 +71,13 @@ inline Vector3 Vector3::operator+=(const Vector3 v) {
     x += v.x;
     y += v.y;
     z += v.z;
+    return *this;
+}
+
+inline Vector3 Vector3::operator*=(const Vector3 v) {
+    x *= v.x;
+    y *= v.y;
+    z *= v.z;
     return *this;
 }
 
@@ -131,5 +142,13 @@ inline Vector3 Vector3::operator-(const float factor) {
 inline Vector3 Vector3::operator/(const float factor) {
     return Vector3(x / factor, y / factor, z / factor);
 }
+
+inline bool Vector3::operator==(const Vector3 v) {
+    return ((x == v.x) && (y == v.y) && (z == v.z));
+}
+
+inline bool Vector3::operator!=(const Vector3 v) {
+    return ((x != v.x) || (y != v.y) || (z != v.z));
+} 
 
 #endif

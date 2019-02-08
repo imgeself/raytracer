@@ -27,11 +27,30 @@ inline Vector3 Normalize(const Vector3 v) {
   return Vector3(v.x * factor, v.y * factor, v.z * factor);
 }
 
+inline Vector3 Lerp(Vector3 left, float factor, Vector3 right) {
+    return left * (1.0f - factor) + right * factor;
+}
+
+float RandomUnilateral() {
+    return (float) rand() / (float) RAND_MAX;
+}
+
+float RandomBilateral() {
+    return 2.0f * RandomUnilateral() - 1.0f;
+}
+
 inline uint32_t RGBPackToUInt32(Vector3 color) {
   return (255 << 24 |
 	  (int32_t) (255 * color.x) << 16 |
 	  (int32_t) (255 * color.y) << 8 |
 	  (int32_t) (255 * color.z) << 0);
+}
+
+inline uint32_t RGBPackToUInt32WithGamma2(Vector3 color) {
+  return (255 << 24 |
+	  (int32_t) (255 * sqrtf(color.x)) << 16 |
+	  (int32_t) (255 * sqrtf(color.y)) << 8 |
+	  (int32_t) (255 * sqrtf(color.z)) << 0);
 }
 
 #endif

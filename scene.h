@@ -3,37 +3,30 @@
 
 #include "math_util.h"
 
-struct Metarial {
+struct Material {
+    float reflection; // 0 is pure diffuse, 1 is mirror.
     Vector3 color;
 };
 
 struct Sphere {
     Vector3 position;
     float radius;
-    uint32_t metarialIndex;
+    uint32_t materialIndex;
 };
 
 struct Plane {
     Vector3 normal;
     float d;
-    uint32_t metarialIndex;
-};
-
-struct Light {
-    Vector3 position;
-    Vector3 color;
-    float density = 1;
+    uint32_t materialIndex;
 };
 
 struct World {
-    uint32_t metarialCount;
-    Metarial* metarials;
+    uint32_t materialCount;
+    Material* materials;
     uint32_t sphereCount;
     Sphere* spheres;
     uint32_t planeCount;
     Plane* planes;
-    uint32_t lightCount;
-    Light* lights;
 };
 
 #endif
