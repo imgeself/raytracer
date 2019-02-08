@@ -94,9 +94,8 @@ Vector3 RaytraceWorld(World* world, Ray* ray) {
 	    Vector3 randomBounce = intersectionResult.hitNormal + Vector3(RandomBilateral(), RandomBilateral(), RandomBilateral());
 	    bounceRay.direction = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
 	} else {
-	    // Hit nothing aka sky
-	    // We just return attenuation. No sky color or sky emmiter.
-	    Material mat = world->materials[intersectionResult.hitMaterialIndex];
+	    // Hit nothing (sky)
+	    // We just return attenuation for now. No sky color or sky emmiter.
 	    result = attenuation;
 	    break;
 	}
@@ -187,17 +186,23 @@ int main(int argc, char** argv) {
     float halfFilmWidth = filmWidth * 0.5f;
     float halfFilmHeight = filmHeight * 0.5f;
 
+    float halfPixelWidth = 0.5f / image.width;
+    float halfPixelHeight = 0.5f / image.height;
+
     uint32_t sampleSize = 32;
     uint32_t *frameBuffer = image.pixelData;  
     for (int32_t y = 0; y < image.height; ++y) {
         float filmY = ((float) y / (float) image.height) * -2.0f + 1.0f;
         for (int32_t x = 0; x < image.width; ++x) {
             float filmX = (((float) x / (float) image.width) * 2.0f - 1.0f);
-            
-            Vector3 filmPosition = filmCenter + cameraX * filmX * halfFilmWidth + cameraY * halfFilmHeight * filmY;
 
 	    Vector3 color(0.0f, 0.0f, 0.0f);
 	    for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
+		float offsetX = filmX + RandomBilateral() * halfPixelWidth;
+		float offsetY = filmY + RandomBilateral() * halfPixelHeight;
+            
+		Vector3 filmPosition = filmCenter + cameraX * offsetX * halfFilmWidth + cameraY * halfFilmHeight * offsetY;
+		
 		Ray ray = {};
 		ray.origin = cameraPosition;
 		ray.direction = Normalize(filmPosition - cameraPosition);
