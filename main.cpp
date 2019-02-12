@@ -65,12 +65,10 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
     return intersectionResult->t < F32Max;
 }
 
-
-
-// Checks for word intersection. 
-// If there is, iterate through lights and calculate the sum of lights then add to the color.
-// This method of light blending not physically correct it all.
-// But its okay for our purposes now.
+// Main ray trace function.
+// I use a loop-based tracing instead of recursion-based trace function.
+// You can write clean code by using recursion but I find recursion hard to understand.
+// This way is more straightforward and understandable for me.
 Vector3 RaytraceWorld(World* world, Ray* ray) {
     Vector3 result(0.0f, 0.0f, 0.0f);
 
@@ -82,17 +80,47 @@ Vector3 RaytraceWorld(World* world, Ray* ray) {
     for (uint32_t bounceIndex = 0; bounceIndex < 8; ++bounceIndex) {    
 	WorldIntersectionResult intersectionResult = {};
 	bool isIntersect = IntersectWorld(world, &bounceRay, &intersectionResult);
-    
+
+
 	if (isIntersect) {
 	    Material mat = world->materials[intersectionResult.hitMaterialIndex];
-	    
+
 	    result = attenuation;
 	    attenuation *= mat.color;
-
-	    Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal * DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
 	    bounceRay.origin = bounceRay.origin + bounceRay.direction * intersectionResult.t;
-	    Vector3 randomBounce = intersectionResult.hitNormal + Vector3(RandomBilateral(), RandomBilateral(), RandomBilateral());
-	    bounceRay.direction = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
+
+	    // Fresnel coefficient is between 0 and 1. We start with 1 which is full reflection, no refraction.
+	    float fresnelCoefficient = 1.0;
+	    Vector3 refractedRay;
+	    bool isRefract = Refract(bounceRay.direction, intersectionResult.hitNormal,
+	    			     mat.refractiveIndex, &refractedRay);
+
+	    if (mat.refractiveIndex != 0.0f && isRefract) {
+		// Refractive material
+	    	refractedRay = Normalize(refractedRay);
+
+		// We use the Schlick Approximation for getting fresnel coefficient. It's okay for our purposes.
+		// NOTE: We can use actual Fresnel Equations for making the image little bit more realistic.
+		fresnelCoefficient = Schlick(bounceRay.direction, intersectionResult.hitNormal,
+				      mat.refractiveIndex);
+	    }
+	    
+	    Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal *
+		DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
+	    Vector3 randomBounce = intersectionResult.hitNormal +
+		Vector3(RandomBilateral(), RandomBilateral(), RandomBilateral());
+	    Vector3 reflectedRay = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
+
+	    // We use the Russian Roulette method for determining which way to go. It fits our architecture.
+	    // We might do calculate reflected and refracted ray separately and apply linear interpolation
+	    // between them by coefficient given from the Fresnel Equations.
+	    if (RandomUnilateral() < fresnelCoefficient) {
+		bounceRay.direction = reflectedRay;
+	    } else {
+		bounceRay.direction = refractedRay;
+	    }
+	    	
+	    
 	} else {
 	    // Hit nothing (sky)
 	    // We just return attenuation for now. No sky color or sky emmiter.
@@ -113,7 +141,7 @@ int main(int argc, char** argv) {
     // Y is up.
     const Vector3 globalUpVector = Vector3(0.0f, 1.0f, 0.0f);
 
-	// Generate scene
+    // Generate scene
     Plane plane = {};
     plane.normal = globalUpVector;
     plane.d = 0;
@@ -133,12 +161,17 @@ int main(int argc, char** argv) {
     sphere3.position = Vector3(-4.0f, 2.0f, 1.0f);
     sphere3.radius = 1.0f;
     sphere3.materialIndex = 3;
-   
     
-    Sphere spheres[3];
+    Sphere sphere4 = {};
+    sphere4.position = Vector3(2.0f, 1.0f, -1.0f);
+    sphere4.radius = 1.0f;
+    sphere4.materialIndex = 5;
+    
+    Sphere spheres[4];
     spheres[0] = sphere;
     spheres[1] = sphere2;
     spheres[2] = sphere3;
+    spheres[3] = sphere4;
     
     Material defaultMaterial = {};
     defaultMaterial.color = Vector3(1.0f, 1.0f, 1.0f);
@@ -150,29 +183,35 @@ int main(int argc, char** argv) {
     sphereMaterial.color = Vector3(0.8f, 0.3f, 0.3f);
 
     Material sphere2Material = {};
-    sphere2Material.color = Vector3(0.9f, 0.9f, 0.9f);
+    sphere2Material.color = Vector3(1.0f, 1.0f, 1.0f) * 0.9f;
     sphere2Material.reflection = 1.0f;
 
     Material sphere3Material = {};
     sphere3Material.color = Vector3(0.8f, 0.6f, 0.2f);
     sphere3Material.reflection = 0.9f;
+
+    Material sphere4Material = {};
+    sphere4Material.color = Vector3(1.0f, 1.0f, 1.0f) * 0.9f;
+    sphere4Material.refractiveIndex = 1.5f;
+    sphere4Material.reflection = 1.0f;
     
-    Material materials[5] = {};
+    Material materials[6] = {};
     materials[0] = defaultMaterial;
     materials[plane.materialIndex] = planeMaterial;
     materials[sphere.materialIndex] = sphereMaterial;
     materials[sphere2.materialIndex] = sphere2Material;
     materials[sphere3.materialIndex] = sphere3Material;
+    materials[sphere4.materialIndex] = sphere4Material;
     
     World world = {};
-    world.materialCount = 5;
+    world.materialCount = 6;
     world.materials = materials;
     world.planeCount = 1;
     world.planes = &plane;
-    world.sphereCount = 3;
+    world.sphereCount = 4;
     world.spheres = spheres;
     
-    Vector3 cameraPosition = Vector3(0.0f, 1.0f, 10.0f);
+    Vector3 cameraPosition = Vector3(0.0f, 3.0f, 10.0f);
     Vector3 cameraZ = Normalize(cameraPosition);
     Vector3 cameraX = Normalize(CrossProduct(globalUpVector, cameraZ));
     Vector3 cameraY = Normalize(CrossProduct(cameraZ, cameraX));

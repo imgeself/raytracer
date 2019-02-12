@@ -49,13 +49,13 @@ float RandomBilateral() {
     return 2.0f * RandomUnilateral() - 1.0f;
 }
 
-bool Refract(Vector3 incidentVector, Vector3 normal,
-	     float refractiveIndex, Vector3* refractionDirection) {
+inline bool Refract(Vector3 incidentVector, Vector3 normal,
+		    float refractiveIndex, Vector3* refractionDirection) {
     // Clamp cos value for avoiding any NaN errors;
     float cosIncidentAngle = Clamp(-1.0f, DotProduct(incidentVector, normal), 1.0f);
     Vector3 hitNormal = normal;
     float refractiveIndexRatio;
-    // NOTE: we assume incident ray comes from the air which has refraction index equals 1
+    // NOTE: we assume incident ray comes from the air which has refraction index equals 1.
     if (cosIncidentAngle < 0) {
 	// We are coming from outside the surface
 	cosIncidentAngle = -cosIncidentAngle;
@@ -67,6 +67,8 @@ bool Refract(Vector3 incidentVector, Vector3 normal,
 
     float discriminant = 1 - refractiveIndexRatio * refractiveIndexRatio *
 	(1 - cosIncidentAngle * cosIncidentAngle);
+    // If discriminant lower than 0 we cannot refract the other medium.
+    // This is called total internal reflection.
     if (discriminant < 0) {
 	return false;
     } else {
@@ -74,8 +76,21 @@ bool Refract(Vector3 incidentVector, Vector3 normal,
 	    (refractiveIndexRatio * cosIncidentAngle - sqrtf(discriminant));
 	return true;
     }
-    
 }
+
+inline float Schlick(Vector3 incidentVector, Vector3 normal,
+		     float refractiveIndex) {
+    float cosIncidentAngle = Clamp(-1.0f, DotProduct(incidentVector, normal), 1.0f);
+    float cosine;
+    if (cosIncidentAngle > 0) {
+	cosine = cosIncidentAngle;
+    } else {
+	cosine = -cosIncidentAngle;
+    }
+    float r0 = (1 - refractiveIndex) / (1 + refractiveIndex);
+    r0 = r0 * r0;
+    return r0 + (1 - r0) * powf((1 - cosine), 5);
+} 
 
 inline uint32_t RGBPackToUInt32(Vector3 color) {
   return (255 << 24 |

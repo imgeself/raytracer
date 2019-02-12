@@ -4,6 +4,7 @@
 #include "math_util.h"
 
 struct Material {
+    float refractiveIndex; // Refractive index of material. 0 means no refraction.
     float reflection; // 0 is pure diffuse, 1 is mirror.
     Vector3 color;
 };
