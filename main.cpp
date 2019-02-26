@@ -1,9 +1,13 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
+
 #include "image.h"
 #include "math_util.h"
 #include "scene.h"
+
+static uint64_t bouncesComputed;
 
 struct Ray {
     Vector3 origin;
@@ -80,7 +84,7 @@ Vector3 RaytraceWorld(World* world, Ray* ray) {
     for (uint32_t bounceIndex = 0; bounceIndex < 8; ++bounceIndex) {    
 	WorldIntersectionResult intersectionResult = {};
 	bool isIntersect = IntersectWorld(world, &bounceRay, &intersectionResult);
-
+	++bouncesComputed;
 
 	if (isIntersect) {
 	    Material mat = world->materials[intersectionResult.hitMaterialIndex];
@@ -114,7 +118,7 @@ Vector3 RaytraceWorld(World* world, Ray* ray) {
 	    // We use the Russian Roulette method for determining which way to go. It fits our architecture.
 	    // We might do calculate reflected and refracted ray separately and apply linear interpolation
 	    // between them by coefficient given from the Fresnel Equations.
-	    if (RandomUnilateral() < fresnelCoefficient) {
+	    if (RandomUnilateral() <= fresnelCoefficient) {
 		bounceRay.direction = reflectedRay;
 	    } else {
 		bounceRay.direction = refractedRay;
@@ -211,7 +215,7 @@ int main(int argc, char** argv) {
     world.sphereCount = 4;
     world.spheres = spheres;
     
-    Vector3 cameraPosition = Vector3(0.0f, 3.0f, 10.0f);
+    Vector3 cameraPosition = Vector3(0.0f, 2.0f, 7.0f);
     Vector3 cameraZ = Normalize(cameraPosition);
     Vector3 cameraX = Normalize(CrossProduct(globalUpVector, cameraZ));
     Vector3 cameraY = Normalize(CrossProduct(cameraZ, cameraX));
@@ -228,7 +232,9 @@ int main(int argc, char** argv) {
     float halfPixelWidth = 0.5f / image.width;
     float halfPixelHeight = 0.5f / image.height;
 
-    uint32_t sampleSize = 32;
+    clock_t startClock = clock();
+    
+    uint32_t sampleSize = 64;
     uint32_t *frameBuffer = image.pixelData;  
     for (int32_t y = 0; y < image.height; ++y) {
         float filmY = ((float) y / (float) image.height) * -2.0f + 1.0f;
@@ -250,9 +256,21 @@ int main(int argc, char** argv) {
 	    }
             
             *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
-            
+
         }
+	if (y % 32 == 0) {
+	    fprintf(stdout, "Raytracing %d%%...\r", 100 * y / image.height);
+	    fflush(stdout);
+	}
     }
+
+    clock_t endClock = clock();
+    uint32_t timeElapsedMs = (endClock - startClock) / (CLOCKS_PER_SEC / 1000);
+    printf("Raytracing time: %dms\n", timeElapsedMs);
+    printf("Total computed rays: %llu\n", bouncesComputed);
+    printf("Performance: %.1fMray/s, %fms/ray\n", (bouncesComputed / 1000000.0) / (timeElapsedMs / 1000),
+	   (double) timeElapsedMs / (double) bouncesComputed);
+    
     
     WriteImageFile(&image, "render.bmp");
     FreeImage(&image);
