@@ -5,6 +5,7 @@
 #include <float.h>
 #include "math_vector.h"
 
+#define U32Max ((uint32_t)-1)
 #define F32Max FLT_MAX
 
 inline float Clamp(float low, float value, float high) {
@@ -41,12 +42,24 @@ inline Vector3 Lerp(Vector3 left, float factor, Vector3 right) {
     return left * (1.0f - factor) + right * factor;
 }
 
-float RandomUnilateral() {
-    return (float) rand() / (float) RAND_MAX;
+// The state must be initialized to non-zero value
+inline uint32_t XOrShift32(uint32_t *state)
+{
+    // https://en.wikipedia.org/wiki/Xorshift
+    uint32_t x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    return x;
 }
 
-float RandomBilateral() {
-    return 2.0f * RandomUnilateral() - 1.0f;
+inline float RandomUnilateral(uint32_t *state) {
+    return (float) XOrShift32(state) / (float) U32Max;
+}
+
+inline float RandomBilateral(uint32_t *state) {
+    return 2.0f * RandomUnilateral(state) - 1.0f;
 }
 
 inline bool Refract(Vector3 incidentVector, Vector3 normal,

@@ -73,7 +73,7 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
 // I use a loop-based tracing instead of recursion-based trace function.
 // You can write clean code by using recursion but I find recursion hard to understand.
 // This way is more straightforward and understandable for me.
-Vector3 RaytraceWorld(World* world, Ray* ray) {
+Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t randomState) {
     Vector3 result(0.0f, 0.0f, 0.0f);
 
     Ray bounceRay = {};
@@ -112,13 +112,15 @@ Vector3 RaytraceWorld(World* world, Ray* ray) {
 	    Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal *
 		DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
 	    Vector3 randomBounce = intersectionResult.hitNormal +
-		Vector3(RandomBilateral(), RandomBilateral(), RandomBilateral());
+		Vector3(RandomBilateral(&randomState),
+			RandomBilateral(&randomState),
+			RandomBilateral(&randomState));
 	    Vector3 reflectedRay = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
 
 	    // We use the Russian Roulette method for determining which way to go. It fits our architecture.
 	    // We might do calculate reflected and refracted ray separately and apply linear interpolation
 	    // between them by coefficient given from the Fresnel Equations.
-	    if (RandomUnilateral() <= fresnelCoefficient) {
+	    if (RandomUnilateral(&randomState) <= fresnelCoefficient) {
 		bounceRay.direction = reflectedRay;
 	    } else {
 		bounceRay.direction = refractedRay;
@@ -215,7 +217,7 @@ int main(int argc, char** argv) {
     world.sphereCount = 4;
     world.spheres = spheres;
     
-    Vector3 cameraPosition = Vector3(0.0f, 2.0f, 7.0f);
+    Vector3 cameraPosition = Vector3(0.0f, 3.0f, 10.0f);
     Vector3 cameraZ = Normalize(cameraPosition);
     Vector3 cameraX = Normalize(CrossProduct(globalUpVector, cameraZ));
     Vector3 cameraY = Normalize(CrossProduct(cameraZ, cameraX));
@@ -233,8 +235,11 @@ int main(int argc, char** argv) {
     float halfPixelHeight = 0.5f / image.height;
 
     clock_t startClock = clock();
+
+    //  I used constant state for random function becase I want to get same result every time for now.
+    uint32_t randomState = (uint32_t) 8563679685; 
     
-    uint32_t sampleSize = 64;
+    uint32_t sampleSize = 32;
     uint32_t *frameBuffer = image.pixelData;  
     for (int32_t y = 0; y < image.height; ++y) {
         float filmY = ((float) y / (float) image.height) * -2.0f + 1.0f;
@@ -243,8 +248,8 @@ int main(int argc, char** argv) {
 
 	    Vector3 color(0.0f, 0.0f, 0.0f);
 	    for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
-		float offsetX = filmX + RandomBilateral() * halfPixelWidth;
-		float offsetY = filmY + RandomBilateral() * halfPixelHeight;
+		float offsetX = filmX + RandomBilateral(&randomState) * halfPixelWidth;
+		float offsetY = filmY + RandomBilateral(&randomState) * halfPixelHeight;
             
 		Vector3 filmPosition = filmCenter + cameraX * offsetX * halfFilmWidth + cameraY * halfFilmHeight * offsetY;
 		
@@ -252,7 +257,7 @@ int main(int argc, char** argv) {
 		ray.origin = cameraPosition;
 		ray.direction = Normalize(filmPosition - cameraPosition);
             
-		color += RaytraceWorld(&world, &ray);
+		color += RaytraceWorld(&world, &ray, randomState);
 	    }
             
             *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
@@ -265,10 +270,10 @@ int main(int argc, char** argv) {
     }
 
     clock_t endClock = clock();
-    uint32_t timeElapsedMs = (endClock - startClock) / (CLOCKS_PER_SEC / 1000);
-    printf("Raytracing time: %dms\n", timeElapsedMs);
+    uint64_t timeElapsedMs = (endClock - startClock) / (CLOCKS_PER_SEC * 0.001);
+    printf("Raytracing time: %llums\n", timeElapsedMs);
     printf("Total computed rays: %llu\n", bouncesComputed);
-    printf("Performance: %.1fMray/s, %fms/ray\n", (bouncesComputed / 1000000.0) / (timeElapsedMs / 1000),
+    printf("Performance: %.1fMray/s, %fms/ray\n", (bouncesComputed / 1000.0) / timeElapsedMs,
 	   (double) timeElapsedMs / (double) bouncesComputed);
     
     
