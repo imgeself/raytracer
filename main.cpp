@@ -2,12 +2,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+#include <assert.h>
 
 #include "image.h"
 #include "math_util.h"
 #include "scene.h"
 
-static uint64_t bouncesComputed;
+#include <pthread.h>
+#include <mach/mach_time.h>
 
 struct Ray {
     Vector3 origin;
@@ -69,16 +71,35 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
     return intersectionResult->t < F32Max;
 }
 
+struct WorkOrder {
+    Image* image;
+    World* world;
+    uint32_t startRowIndex;
+    uint32_t endRowIndex;
+    uint32_t sampleSize;
+};
+
+struct WorkQueue {
+    uint32_t workOrderCount;
+    WorkOrder* workOrders;
+
+    volatile uint64_t nextOrderToDo;
+    volatile uint64_t finishedOrderCount;
+    volatile uint64_t totalBouncesComputed;
+};
+
 // Main ray trace function.
 // I use a loop-based tracing instead of recursion-based trace function.
 // You can write clean code by using recursion but I find recursion hard to understand.
 // This way is more straightforward and understandable for me.
-Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t randomState) {
+Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* workQueue) {
     Vector3 result(0.0f, 0.0f, 0.0f);
 
     Ray bounceRay = {};
     bounceRay.origin = ray->origin;
     bounceRay.direction = ray->direction;
+
+    uint64_t bouncesComputed = 0;
 
     Vector3 attenuation(1.0f, 1.0f, 1.0f);
     for (uint32_t bounceIndex = 0; bounceIndex < 8; ++bounceIndex) {    
@@ -93,34 +114,38 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t randomState) {
 	    attenuation *= mat.color;
 	    bounceRay.origin = bounceRay.origin + bounceRay.direction * intersectionResult.t;
 
-	    // Fresnel coefficient is between 0 and 1. We start with 1 which is full reflection, no refraction.
-	    float fresnelCoefficient = 1.0;
-	    Vector3 refractedRay;
-	    bool isRefract = Refract(bounceRay.direction, intersectionResult.hitNormal,
-	    			     mat.refractiveIndex, &refractedRay);
-
-	    if (mat.refractiveIndex != 0.0f && isRefract) {
-		// Refractive material
-	    	refractedRay = Normalize(refractedRay);
-
-		// We use the Schlick Approximation for getting fresnel coefficient. It's okay for our purposes.
-		// NOTE: We can use actual Fresnel Equations for making the image little bit more realistic.
-		fresnelCoefficient = Schlick(bounceRay.direction, intersectionResult.hitNormal,
-				      mat.refractiveIndex);
-	    }
+	   
 	    
 	    Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal *
 		DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
 	    Vector3 randomBounce = intersectionResult.hitNormal +
-		Vector3(RandomBilateral(&randomState),
-			RandomBilateral(&randomState),
-			RandomBilateral(&randomState));
+		Vector3(RandomBilateral(randomState),
+			RandomBilateral(randomState),
+			RandomBilateral(randomState));
 	    Vector3 reflectedRay = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
+
+	     // Fresnel coefficient is between 0 and 1. We start with 1 which is full reflection, no refraction.
+	    float fresnelCoefficient = 1.0;
+	    Vector3 refractedRay = reflectedRay;
+
+	    if (mat.refractiveIndex != 0.0f) {
+		bool isRefract = Refract(bounceRay.direction, intersectionResult.hitNormal,
+	    			     mat.refractiveIndex, &refractedRay);
+		if (isRefract) {
+		    // Refractive material
+		    refractedRay = Normalize(refractedRay);
+
+		    // We use the Schlick Approximation for getting fresnel coefficient. It's okay for our purposes.
+		    // NOTE: We can use actual Fresnel Equations for making the image little bit more realistic.
+		    fresnelCoefficient = Schlick(bounceRay.direction, intersectionResult.hitNormal,
+						 mat.refractiveIndex);
+		}
+	    }
 
 	    // We use the Russian Roulette method for determining which way to go. It fits our architecture.
 	    // We might do calculate reflected and refracted ray separately and apply linear interpolation
 	    // between them by coefficient given from the Fresnel Equations.
-	    if (RandomUnilateral(&randomState) <= fresnelCoefficient) {
+	    if (RandomUnilateral(randomState) <= fresnelCoefficient) {
 		bounceRay.direction = reflectedRay;
 	    } else {
 		bounceRay.direction = refractedRay;
@@ -136,16 +161,87 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t randomState) {
 	
     }
 
+    __sync_fetch_and_add(&workQueue->totalBouncesComputed, bouncesComputed);
+
     
     return result;
 }
 
+bool RaytraceWork(WorkQueue* workQueue) {
+
+    uint32_t nextOrderToDo =  __sync_fetch_and_add(&workQueue->nextOrderToDo, 1);
+    if (nextOrderToDo >= workQueue->workOrderCount) {
+	return false;
+    }
+
+    WorkOrder workOrder = workQueue->workOrders[nextOrderToDo];
+    Image* image = workOrder.image;
+    World* world = workOrder.world;
+    uint32_t startRowIndex = workOrder.startRowIndex;
+    uint32_t endRowIndex = workOrder.endRowIndex;
+    uint32_t sampleSize = workOrder.sampleSize;
+
+    float imageAspectRatio = (float) image->width / (float) image->height;
+
+    Vector3 cameraPosition = Vector3(0.0f, 3.0f, 10.0f);
+    Vector3 cameraZ = Normalize(cameraPosition);
+    Vector3 cameraX = Normalize(CrossProduct(Vector3(0.0f, 1.0f, 0.0f), cameraZ));
+    Vector3 cameraY = Normalize(CrossProduct(cameraZ, cameraX));
+    
+    float filmDistance = 1.0;
+    Vector3 filmCenter = cameraPosition - cameraZ * filmDistance;
+    
+    float filmWidth = 1.0f * imageAspectRatio;
+    float filmHeight = 1.0f;
+    
+    float halfFilmWidth = filmWidth * 0.5f;
+    float halfFilmHeight = filmHeight * 0.5f;
+
+    float halfPixelWidth = 0.5f / image->width;
+    float halfPixelHeight = 0.5f / image->height;
+
+    uint32_t randomState = 262346 * (startRowIndex * endRowIndex / 36);
+    
+    uint32_t* frameBuffer = image->pixelData + (startRowIndex * image->width);
+    for (int32_t y = startRowIndex; y < endRowIndex; ++y) {
+        float filmY = ((float) y / (float) image->height) * -2.0f + 1.0f;
+        for (int32_t x = 0; x < image->width; ++x) {
+            float filmX = (((float) x / (float) image->width) * 2.0f - 1.0f);
+	    
+	    Vector3 color(0.0f, 0.0f, 0.0f);
+	    for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
+		float offsetX = filmX + RandomBilateral(&randomState) * halfPixelWidth;
+		float offsetY = filmY + RandomBilateral(&randomState) * halfPixelHeight;
+		
+		Vector3 filmPosition = filmCenter + cameraX * offsetX * halfFilmWidth + cameraY * halfFilmHeight * offsetY;
+		
+		Ray ray = {};
+		ray.origin = cameraPosition;
+		ray.direction = Normalize(filmPosition - cameraPosition);
+            
+		color += RaytraceWorld(world, &ray, &randomState, workQueue);
+	    }
+            
+            *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
+        }
+    }
+
+    __sync_fetch_and_add(&workQueue->finishedOrderCount, 1);
+    return true;
+}
+
+void* ThreadProc(void* arguments) {
+    WorkQueue* workQueue = (WorkQueue*) arguments;
+    while (RaytraceWork(workQueue));
+    
+    return 0;
+}
+
 int main(int argc, char** argv) {
     Image image = CreateImage(1280, 720);
-    float imageAspectRatio = (float) image.width / (float) image.height;
 	
     // Y is up.
-    const Vector3 globalUpVector = Vector3(0.0f, 1.0f, 0.0f);
+    Vector3 globalUpVector = Vector3(0.0f, 1.0f, 0.0f);
 
     // Generate scene
     Plane plane = {};
@@ -215,69 +311,81 @@ int main(int argc, char** argv) {
     world.planeCount = 1;
     world.planes = &plane;
     world.sphereCount = 4;
-    world.spheres = spheres;
-    
-    Vector3 cameraPosition = Vector3(0.0f, 3.0f, 10.0f);
-    Vector3 cameraZ = Normalize(cameraPosition);
-    Vector3 cameraX = Normalize(CrossProduct(globalUpVector, cameraZ));
-    Vector3 cameraY = Normalize(CrossProduct(cameraZ, cameraX));
-    
-    float filmDistance = 1.0;
-    Vector3 filmCenter = cameraPosition - cameraZ * filmDistance;
-    
-    float filmWidth = 1.0f * imageAspectRatio;
-    float filmHeight = 1.0f;
-    
-    float halfFilmWidth = filmWidth * 0.5f;
-    float halfFilmHeight = filmHeight * 0.5f;
+    world.spheres = spheres;    
 
-    float halfPixelWidth = 0.5f / image.width;
-    float halfPixelHeight = 0.5f / image.height;
-
-    clock_t startClock = clock();
-
-    //  I used constant state for random function becase I want to get same result every time for now.
-    uint32_t randomState = (uint32_t) 8563679685; 
+    uint64_t startClock = mach_absolute_time();
     
-    uint32_t sampleSize = 32;
-    uint32_t *frameBuffer = image.pixelData;  
-    for (int32_t y = 0; y < image.height; ++y) {
-        float filmY = ((float) y / (float) image.height) * -2.0f + 1.0f;
-        for (int32_t x = 0; x < image.width; ++x) {
-            float filmX = (((float) x / (float) image.width) * 2.0f - 1.0f);
+    uint32_t sampleSize = 512;
+    
+#if SINGLE_THREAD
+    uint32_t totalWorkOrderCount = 1;    
+    WorkQueue workQueue = {};
+    workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
+    workQueue.workOrderCount = totalWorkOrderCount;
 
-	    Vector3 color(0.0f, 0.0f, 0.0f);
-	    for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
-		float offsetX = filmX + RandomBilateral(&randomState) * halfPixelWidth;
-		float offsetY = filmY + RandomBilateral(&randomState) * halfPixelHeight;
-            
-		Vector3 filmPosition = filmCenter + cameraX * offsetX * halfFilmWidth + cameraY * halfFilmHeight * offsetY;
-		
-		Ray ray = {};
-		ray.origin = cameraPosition;
-		ray.direction = Normalize(filmPosition - cameraPosition);
-            
-		color += RaytraceWorld(&world, &ray, randomState);
-	    }
-            
-            *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
+    WorkOrder* workOrder = workQueue.workOrders;
+    workOrder->image = &image;
+    workOrder->world = &world;
+    workOrder->startRowIndex = 0;
+    workOrder->endRowIndex = image.height;
+    workOrder->sampleSize = sampleSize;
 
-        }
-	if (y % 32 == 0) {
-	    fprintf(stdout, "Raytracing %d%%...\r", 100 * y / image.height);
+    RaytraceRow(&workQueue);
+    
+#else
+    uint32_t totalWorkOrderCount = image.height;    
+    WorkQueue workQueue = {};
+    workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
+    workQueue.workOrderCount = totalWorkOrderCount;
+
+    for (uint32_t rowIndex = 0; rowIndex < totalWorkOrderCount; ++rowIndex) {
+	WorkOrder* workOrder = &workQueue.workOrders[rowIndex];
+	workOrder->image = &image;
+	workOrder->world = &world;
+	workOrder->startRowIndex = rowIndex;
+	workOrder->endRowIndex = rowIndex + 1;
+	workOrder->sampleSize = sampleSize;
+    }
+
+    uint32_t threadCount = 4;
+    for (uint32_t threadIndex = 1; threadIndex < threadCount; ++threadIndex) {
+	pthread_t thread;
+	pthread_create(&thread, NULL, ThreadProc, &workQueue);
+	pthread_cancel(thread);
+    }
+
+    while (workQueue.finishedOrderCount < totalWorkOrderCount) {
+	if (RaytraceWork(&workQueue)) {
+	    fprintf(stdout, "Raytracing %.0f%%...\r", 100 * ((float) workQueue.nextOrderToDo / totalWorkOrderCount));
 	    fflush(stdout);
 	}
     }
+#endif
 
-    clock_t endClock = clock();
-    uint64_t timeElapsedMs = (endClock - startClock) / (CLOCKS_PER_SEC * 0.001);
+    uint64_t endClock =  mach_absolute_time();
+    
+    mach_timebase_info_data_t tb;
+    uint64_t freq_num = 0;
+    uint64_t freq_denom = 0;
+    if (mach_timebase_info (&tb) == KERN_SUCCESS && tb.denom != 0) {
+        freq_num   = (uint64_t) tb.numer;
+        freq_denom = (uint64_t) tb.denom;
+    }
+    
+    uint64_t valueDiff = endClock - startClock;
+
+    valueDiff /= 1000000;
+
+    valueDiff *= freq_num;
+    valueDiff /= freq_denom;
+    
+    uint64_t timeElapsedMs = valueDiff; //(endClock - startClock) / (CLOCKS_PER_SEC * 0.001);
+    uint64_t bouncesComputed = workQueue.totalBouncesComputed;
     printf("Raytracing time: %llums\n", timeElapsedMs);
     printf("Total computed rays: %llu\n", bouncesComputed);
     printf("Performance: %.1fMray/s, %fms/ray\n", (bouncesComputed / 1000.0) / timeElapsedMs,
 	   (double) timeElapsedMs / (double) bouncesComputed);
     
-    
     WriteImageFile(&image, "render.bmp");
-    FreeImage(&image);
     return 0;
 }

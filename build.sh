@@ -1,10 +1,10 @@
-compileArguments="-std=c++11 -Wall"
+compileArguments=(-std=c++11 -Wall)
 
 if [ "$1" == "-d" ]; then
     # Debug build
-    compileArguments+=" -g"
+    compileArguments+=(-g)
 else
-    compileArguments+=" -O2"
+    compileArguments+=(-O2)
 fi
 
-g++ $compileArguments -o bin/raytracer main.cpp image.cpp && bin/raytracer && open render.bmp
+clang++ ${compileArguments[@]} -o bin/raytracer main.cpp image.cpp -lpthread && bin/raytracer && open render.bmp
