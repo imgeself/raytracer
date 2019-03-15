@@ -21,6 +21,13 @@ struct Plane {
     uint32_t materialIndex;
 };
 
+struct Camera {
+    Vector3 position;
+    Vector3 zVec;
+    Vector3 yVec;
+    Vector3 xVec;
+};
+
 struct World {
     uint32_t materialCount;
     Material* materials;
@@ -28,6 +35,21 @@ struct World {
     Sphere* spheres;
     uint32_t planeCount;
     Plane* planes;
+    Camera* camera;
 };
+
+Camera CreateCamera(Vector3 cameraPosition) {
+    Vector3 cameraZ = Normalize(cameraPosition);
+    Vector3 cameraX = Normalize(CrossProduct(Vector3(0.0f, 1.0f, 0.0f), cameraZ));
+    Vector3 cameraY = Normalize(CrossProduct(cameraZ, cameraX));
+
+    Camera result = {};
+    result.position = cameraPosition;
+    result.zVec = cameraZ;
+    result.yVec = cameraY;
+    result.xVec = cameraX;
+
+    return result;
+} 
 
 #endif

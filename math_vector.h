@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 struct Vector3 {
-    float x,y,z;
+    float x,y,z = 0.0f;
     
     Vector3();
     Vector3(float x, float y, float z);

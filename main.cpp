@@ -22,7 +22,7 @@ struct WorldIntersectionResult {
     Vector3 hitNormal;
 };
 
-bool 
+bool
 IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResult) {
     float hitTolerance = 0.001;
     float minHitDistance = 0.001;
@@ -183,10 +183,11 @@ bool RaytraceWork(WorkQueue* workQueue) {
 
     float imageAspectRatio = (float) image->width / (float) image->height;
 
-    Vector3 cameraPosition = Vector3(0.0f, 3.0f, 10.0f);
-    Vector3 cameraZ = Normalize(cameraPosition);
-    Vector3 cameraX = Normalize(CrossProduct(Vector3(0.0f, 1.0f, 0.0f), cameraZ));
-    Vector3 cameraY = Normalize(CrossProduct(cameraZ, cameraX));
+    Camera* camera = world->camera;
+    Vector3 cameraPosition = camera->position;
+    Vector3 cameraZ = camera->zVec;
+    Vector3 cameraX = camera->xVec;
+    Vector3 cameraY = camera->yVec;
     
     float filmDistance = 1.0;
     Vector3 filmCenter = cameraPosition - cameraZ * filmDistance;
@@ -200,7 +201,7 @@ bool RaytraceWork(WorkQueue* workQueue) {
     float halfPixelWidth = 0.5f / image->width;
     float halfPixelHeight = 0.5f / image->height;
 
-    uint32_t randomState = 262346 * (startRowIndex * endRowIndex / 36);
+    uint32_t randomState = 262346 * (startRowIndex + endRowIndex * 36);
     
     uint32_t* frameBuffer = image->pixelData + (startRowIndex * image->width);
     for (int32_t y = startRowIndex; y < endRowIndex; ++y) {
@@ -304,6 +305,8 @@ int main(int argc, char** argv) {
     materials[sphere2.materialIndex] = sphere2Material;
     materials[sphere3.materialIndex] = sphere3Material;
     materials[sphere4.materialIndex] = sphere4Material;
+
+    Camera camera = CreateCamera(Vector3(0.0f, 3.0f, 10.0f));
     
     World world = {};
     world.materialCount = 6;
@@ -311,12 +314,13 @@ int main(int argc, char** argv) {
     world.planeCount = 1;
     world.planes = &plane;
     world.sphereCount = 4;
-    world.spheres = spheres;    
+    world.spheres = spheres;
+    world.camera = &camera;
 
     uint64_t startClock = mach_absolute_time();
     
-    uint32_t sampleSize = 512;
-    
+    const uint32_t sampleSize = 512;
+
 #if SINGLE_THREAD
     uint32_t totalWorkOrderCount = 1;    
     WorkQueue workQueue = {};
@@ -330,10 +334,10 @@ int main(int argc, char** argv) {
     workOrder->endRowIndex = image.height;
     workOrder->sampleSize = sampleSize;
 
-    RaytraceRow(&workQueue);
+    RaytraceWork(&workQueue);
     
 #else
-    uint32_t totalWorkOrderCount = image.height;    
+    uint32_t totalWorkOrderCount = image.height;
     WorkQueue workQueue = {};
     workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
     workQueue.workOrderCount = totalWorkOrderCount;
