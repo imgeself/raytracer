@@ -4,12 +4,11 @@
 #include <time.h>
 #include <assert.h>
 
-#include "image.h"
+#include "platform.h"
 #include "math_util.h"
 #include "scene.h"
 
-#include <pthread.h>
-#include <mach/mach_time.h>
+#include "image.cpp"
 
 struct Ray {
     Vector3 origin;
@@ -161,7 +160,7 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
 	
     }
 
-    __sync_fetch_and_add(&workQueue->totalBouncesComputed, bouncesComputed);
+    InterlockedAddAndReturnPrevious(&workQueue->totalBouncesComputed, bouncesComputed);
 
     
     return result;
@@ -169,7 +168,7 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
 
 bool RaytraceWork(WorkQueue* workQueue) {
 
-    uint32_t nextOrderToDo =  __sync_fetch_and_add(&workQueue->nextOrderToDo, 1);
+    uint32_t nextOrderToDo =  InterlockedAddAndReturnPrevious(&workQueue->nextOrderToDo, 1);
     if (nextOrderToDo >= workQueue->workOrderCount) {
 	return false;
     }
@@ -227,11 +226,11 @@ bool RaytraceWork(WorkQueue* workQueue) {
         }
     }
 
-    __sync_fetch_and_add(&workQueue->finishedOrderCount, 1);
+    InterlockedAddAndReturnPrevious(&workQueue->finishedOrderCount, 1);
     return true;
 }
 
-void* ThreadProc(void* arguments) {
+THREAD_PROC_RET ThreadProc(void* arguments) {
     WorkQueue* workQueue = (WorkQueue*) arguments;
     while (RaytraceWork(workQueue));
     
@@ -317,7 +316,7 @@ int main(int argc, char** argv) {
     world.spheres = spheres;
     world.camera = &camera;
 
-    uint64_t startClock = mach_absolute_time();
+    uint64_t startClock = GetTimeMilliseconds();
     
     const uint32_t sampleSize = 512;
 
@@ -351,11 +350,10 @@ int main(int argc, char** argv) {
 	workOrder->sampleSize = sampleSize;
     }
 
-    uint32_t threadCount = 4;
+    uint32_t threadCount = GetNumberOfProcessors();
     for (uint32_t threadIndex = 1; threadIndex < threadCount; ++threadIndex) {
-	pthread_t thread;
-	pthread_create(&thread, NULL, ThreadProc, &workQueue);
-	pthread_cancel(thread);
+	Thread thread = CreateThread(ThreadProc, &workQueue);
+	CloseThreadHandle(thread);
     }
 
     while (workQueue.finishedOrderCount < totalWorkOrderCount) {
@@ -366,24 +364,9 @@ int main(int argc, char** argv) {
     }
 #endif
 
-    uint64_t endClock =  mach_absolute_time();
+    uint64_t endClock =  GetTimeMilliseconds();
     
-    mach_timebase_info_data_t tb;
-    uint64_t freq_num = 0;
-    uint64_t freq_denom = 0;
-    if (mach_timebase_info (&tb) == KERN_SUCCESS && tb.denom != 0) {
-        freq_num   = (uint64_t) tb.numer;
-        freq_denom = (uint64_t) tb.denom;
-    }
-    
-    uint64_t valueDiff = endClock - startClock;
-
-    valueDiff /= 1000000;
-
-    valueDiff *= freq_num;
-    valueDiff /= freq_denom;
-    
-    uint64_t timeElapsedMs = valueDiff; //(endClock - startClock) / (CLOCKS_PER_SEC * 0.001);
+    uint64_t timeElapsedMs = endClock - startClock;
     uint64_t bouncesComputed = workQueue.totalBouncesComputed;
     printf("Raytracing time: %llums\n", timeElapsedMs);
     printf("Total computed rays: %llu\n", bouncesComputed);

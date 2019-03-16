@@ -1,4 +1,4 @@
-compileArguments=(-std=c++11 -Wall)
+compileArguments=(-std=c++11 -Wall -DPLATFORM_MACOS=1)
 
 if [ "$1" == "-d" ]; then
     # Debug build
@@ -10,4 +10,4 @@ else
     compileArguments+=(-O2)
 fi
 
-g++ ${compileArguments[@]} -o bin/raytracer main.cpp image.cpp -lpthread && bin/raytracer && open render.bmp
+g++ ${compileArguments[@]} -o bin/raytracer main.cpp -lpthread && bin/raytracer && open render.bmp
