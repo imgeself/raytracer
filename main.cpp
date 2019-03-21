@@ -10,6 +10,8 @@
 
 #include "image.cpp"
 
+#include <dispatch/dispatch.h>
+
 struct Ray {
     Vector3 origin;
     Vector3 direction;
@@ -82,8 +84,6 @@ struct WorkQueue {
     uint32_t workOrderCount;
     WorkOrder* workOrders;
 
-    volatile uint64_t nextOrderToDo;
-    volatile uint64_t finishedOrderCount;
     volatile uint64_t totalBouncesComputed;
 };
 
@@ -164,12 +164,9 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
     return result;
 }
 
-bool RaytraceWork(WorkQueue* workQueue) {
-
-    uint32_t nextOrderToDo = InterlockedAddAndReturnPrevious(&workQueue->nextOrderToDo, 1);
-    if (nextOrderToDo >= workQueue->workOrderCount) {
-	return false;
-    }
+void RaytraceWork(void* arguments, size_t index) {
+    WorkQueue* workQueue = (WorkQueue*) arguments;
+    uint32_t nextOrderToDo = index;
 
     WorkOrder workOrder = workQueue->workOrders[nextOrderToDo];
     Image* image = workOrder.image;
@@ -226,15 +223,6 @@ bool RaytraceWork(WorkQueue* workQueue) {
     }
 
     InterlockedAddAndReturnPrevious(&workQueue->totalBouncesComputed, totalBounces);
-    InterlockedAddAndReturnPrevious(&workQueue->finishedOrderCount, 1);
-    return true;
-}
-
-THREAD_PROC_RET ThreadProc(void* arguments) {
-    WorkQueue* workQueue = (WorkQueue*) arguments;
-    while (RaytraceWork(workQueue));
-    
-    return 0;
 }
 
 int main(int argc, char** argv) {
@@ -319,24 +307,8 @@ int main(int argc, char** argv) {
     uint64_t startClock = GetTimeMilliseconds();
     
     const uint32_t sampleSize = 512;
-
-#if SINGLE_THREAD
-    uint32_t totalWorkOrderCount = 1;    
-    WorkQueue workQueue = {};
-    workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
-    workQueue.workOrderCount = totalWorkOrderCount;
-
-    WorkOrder* workOrder = workQueue.workOrders;
-    workOrder->image = &image;
-    workOrder->world = &world;
-    workOrder->startRowIndex = 0;
-    workOrder->endRowIndex = image.height;
-    workOrder->sampleSize = sampleSize;
-
-    RaytraceWork(&workQueue);
     
-#else
-    uint32_t stride = 8;
+    uint32_t stride = 1;
     uint32_t totalWorkOrderCount = image.height / stride;
     WorkQueue workQueue = {};
     workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
@@ -353,19 +325,8 @@ int main(int argc, char** argv) {
 	workOrder->sampleSize = sampleSize;
     }
 
-    uint32_t threadCount = GetNumberOfProcessors();
-    for (uint32_t threadIndex = 1; threadIndex < threadCount; ++threadIndex) {
-	Thread thread = CreateThread(ThreadProc, &workQueue);
-	CloseThreadHandle(thread);
-    }
-
-    while (workQueue.finishedOrderCount < totalWorkOrderCount) {
-	if (RaytraceWork(&workQueue)) {
-	    fprintf(stdout, "Raytracing %.0f%%...\r", 100 * ((float) workQueue.finishedOrderCount / totalWorkOrderCount));
-	    fflush(stdout);
-	}
-    }
-#endif
+    dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
+    dispatch_apply_f(totalWorkOrderCount, queue, &workQueue, RaytraceWork);
 
     uint64_t endClock =  GetTimeMilliseconds();
     
