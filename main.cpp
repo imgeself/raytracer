@@ -91,7 +91,7 @@ struct WorkQueue {
 // I use a loop-based tracing instead of recursion-based trace function.
 // You can write clean code by using recursion but I find recursion hard to understand.
 // This way is more straightforward and understandable for me.
-Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* workQueue) {
+Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* workQueue, uint64_t* bounceCount) {
     Vector3 result(0.0f, 0.0f, 0.0f);
 
     Ray bounceRay = {};
@@ -160,15 +160,13 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
 	
     }
 
-    InterlockedAddAndReturnPrevious(&workQueue->totalBouncesComputed, bouncesComputed);
-
-    
+    *bounceCount += bouncesComputed;
     return result;
 }
 
 bool RaytraceWork(WorkQueue* workQueue) {
 
-    uint32_t nextOrderToDo =  InterlockedAddAndReturnPrevious(&workQueue->nextOrderToDo, 1);
+    uint32_t nextOrderToDo = InterlockedAddAndReturnPrevious(&workQueue->nextOrderToDo, 1);
     if (nextOrderToDo >= workQueue->workOrderCount) {
 	return false;
     }
@@ -201,6 +199,7 @@ bool RaytraceWork(WorkQueue* workQueue) {
     float halfPixelHeight = 0.5f / image->height;
 
     uint32_t randomState = 262346 * (startRowIndex + endRowIndex * 36);
+    uint64_t totalBounces = 0;
     
     uint32_t* frameBuffer = image->pixelData + (startRowIndex * image->width);
     for (int32_t y = startRowIndex; y < endRowIndex; ++y) {
@@ -218,14 +217,15 @@ bool RaytraceWork(WorkQueue* workQueue) {
 		Ray ray = {};
 		ray.origin = cameraPosition;
 		ray.direction = Normalize(filmPosition - cameraPosition);
-            
-		color += RaytraceWorld(world, &ray, &randomState, workQueue);
+
+		color += RaytraceWorld(world, &ray, &randomState, workQueue, &totalBounces);
 	    }
             
             *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
         }
     }
 
+    InterlockedAddAndReturnPrevious(&workQueue->totalBouncesComputed, totalBounces);
     InterlockedAddAndReturnPrevious(&workQueue->finishedOrderCount, 1);
     return true;
 }
@@ -336,17 +336,20 @@ int main(int argc, char** argv) {
     RaytraceWork(&workQueue);
     
 #else
-    uint32_t totalWorkOrderCount = image.height;
+    uint32_t stride = 8;
+    uint32_t totalWorkOrderCount = image.height / stride;
     WorkQueue workQueue = {};
     workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
     workQueue.workOrderCount = totalWorkOrderCount;
 
+    uint32_t counter = 0;
     for (uint32_t rowIndex = 0; rowIndex < totalWorkOrderCount; ++rowIndex) {
-	WorkOrder* workOrder = &workQueue.workOrders[rowIndex];
+	WorkOrder* workOrder = workQueue.workOrders + rowIndex;
 	workOrder->image = &image;
 	workOrder->world = &world;
-	workOrder->startRowIndex = rowIndex;
-	workOrder->endRowIndex = rowIndex + 1;
+	workOrder->startRowIndex = counter;
+	counter += stride;
+	workOrder->endRowIndex = counter;
 	workOrder->sampleSize = sampleSize;
     }
 
@@ -358,7 +361,7 @@ int main(int argc, char** argv) {
 
     while (workQueue.finishedOrderCount < totalWorkOrderCount) {
 	if (RaytraceWork(&workQueue)) {
-	    fprintf(stdout, "Raytracing %.0f%%...\r", 100 * ((float) workQueue.nextOrderToDo / totalWorkOrderCount));
+	    fprintf(stdout, "Raytracing %.0f%%...\r", 100 * ((float) workQueue.finishedOrderCount / totalWorkOrderCount));
 	    fflush(stdout);
 	}
     }
