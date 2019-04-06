@@ -15,6 +15,12 @@ struct Sphere {
     uint32_t materialIndex;
 };
 
+struct SphereSoALane {
+    LaneVector3 position;
+    LaneF32 radiusSquared;
+    LaneF32 materialIndex;
+};
+
 struct Plane {
     Vector3 normal;
     float d;
@@ -33,6 +39,8 @@ struct World {
     Material* materials;
     uint32_t sphereCount;
     Sphere* spheres;
+    uint32_t sphereSoAArrayCount;
+    SphereSoALane* sphereSoAArray;
     uint32_t planeCount;
     Plane* planes;
     Camera* camera;
