@@ -1,8 +1,8 @@
-compileArguments=(-std=c++11 -Wall -DPLATFORM_MACOS=1)
+compileArguments=(-std=c++11 -Wall -DPLATFORM_MACOS=1 -march=native)
 
 if [ "$1" == "-d" ]; then
     # Debug build
-    compileArguments+=(-g)
+    compileArguments+=(-g -DSINGLE_THREAD)
 elif [ "$1" == "-p" ]; then
     # Debug build
     compileArguments+=(-g -O2 -shared-libgcc -fno-omit-frame-pointer)

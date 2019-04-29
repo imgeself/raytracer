@@ -6,6 +6,8 @@
 
 #include "platform.h"
 #include "math_util.h"
+#include "simd.h"
+
 #include "scene.h"
 
 #include "image.cpp"
@@ -20,6 +22,106 @@ struct WorldIntersectionResult {
     uint32_t hitMaterialIndex;
     Vector3 hitNormal;
 };
+
+
+bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* intersectionResult) {
+    float hitTolerance = 0.001;
+    float minHitDistance = 0.001;
+
+    float closestHitDistance = F32Max;
+    uint32_t hitMaterialIndex = 0;
+    Vector3 hitNormal;
+    bool anyHit = false;
+
+    // We have only 1 plane in our scene. So we are calculate plane intersection in scalar.
+    for (int planeIndex = 0; planeIndex < world->planeCount; ++planeIndex) {
+        Plane plane = world->planes[planeIndex];
+        
+        float denom = DotProduct(plane.normal, ray->direction);
+        if ((denom < -hitTolerance) || (denom > hitTolerance)) {
+            float hitDistance = (-plane.d - DotProduct(plane.normal, ray->origin)) / denom;
+            if (hitDistance > minHitDistance && hitDistance < closestHitDistance) {
+                closestHitDistance = hitDistance;
+                hitMaterialIndex = plane.materialIndex;
+                hitNormal = plane.normal;
+		anyHit = true;
+            }
+        }
+    }
+
+    // Broadcast scalar values into lanes.
+    LaneVector3 rayOrigin(ray->origin);
+    LaneVector3 rayDirection(ray->direction);
+
+    LaneF32 closestHitDistanceLane = LaneF32(closestHitDistance);
+    LaneF32 hitMaterialIndexLane = LaneF32(hitMaterialIndex);
+    LaneVector3 hitNormalLane = LaneVector3(hitNormal);
+
+    for (int sphereLaneIndex = 0; sphereLaneIndex < world->sphereSoAArrayCount; ++sphereLaneIndex) {	
+	SphereSoALane sphereSoA = world->sphereSoAArray[sphereLaneIndex];
+	
+	LaneVector3 centerToOrigin = rayOrigin - sphereSoA.position;
+        LaneF32 a = DotProduct(rayDirection, rayDirection);
+        LaneF32 b = 2.0f * DotProduct(rayDirection, centerToOrigin);
+        LaneF32 c = DotProduct(centerToOrigin, centerToOrigin) - (sphereSoA.radiusSquared);
+        LaneF32 discriminant = b * b - 4.0f * a * c;
+        LaneF32 denom = 2.0f * a;
+	
+        LaneF32 squareRootMask = discriminant > 0.0f;
+	if (!MaskIsZeroed(squareRootMask)) {
+	    LaneF32 tp = (-b + SquareRoot(discriminant)) / denom;
+	    LaneF32 tn = (-b - SquareRoot(discriminant)) / denom;
+            
+	    LaneF32 hitDistance = tp;
+	    LaneF32 pickMask = (tn > minHitDistance & tn < tp);
+	    Select(&hitDistance, pickMask, tn);   
+            
+	    LaneF32 tMask = (hitDistance > minHitDistance & hitDistance < closestHitDistanceLane);
+	    LaneF32 hitMask = (squareRootMask & tMask);
+
+	    if (!MaskIsZeroed(hitMask)) {	
+		Select(&closestHitDistanceLane, hitMask, hitDistance);
+		Select(&hitMaterialIndexLane, hitMask, sphereSoA.materialIndex);
+            
+		LaneVector3 hitPosition = rayOrigin + rayDirection * hitDistance;
+		Select(&hitNormalLane, hitMask, Normalize(hitPosition - sphereSoA.position));
+		anyHit = true;
+	    }
+	}
+    }
+
+    if (anyHit) {
+	// After calculating n sphere ray intersection, we have to find which one is closer.
+	// This is probably the most naive way to do it. We store lane values into an array and iterating through to find any close hit. 
+	ALIGN_LANE float closestHitDistanceLaneUnpacked[LANE_WIDTH];
+	ALIGN_LANE float hitMaterialIndexLaneUnpacked[LANE_WIDTH];
+	ALIGN_LANE float hitNormalLaneXUnpacked[LANE_WIDTH];
+	ALIGN_LANE float hitNormalLaneYUnpacked[LANE_WIDTH];
+	ALIGN_LANE float hitNormalLaneZUnpacked[LANE_WIDTH];
+	StoreLane(closestHitDistanceLaneUnpacked, closestHitDistanceLane);
+	StoreLane(hitMaterialIndexLaneUnpacked, hitMaterialIndexLane);
+	StoreLane(hitNormalLaneXUnpacked, hitNormalLane.x);
+	StoreLane(hitNormalLaneYUnpacked, hitNormalLane.y);
+	StoreLane(hitNormalLaneZUnpacked, hitNormalLane.z);
+	for (int i = 0; i < LANE_WIDTH; ++i) {
+	    float t = closestHitDistanceLaneUnpacked[i];
+	    if (t < closestHitDistance) {
+		closestHitDistance = t;
+		hitMaterialIndex = hitMaterialIndexLaneUnpacked[i];
+		hitNormal = Vector3(hitNormalLaneXUnpacked[i],
+				    hitNormalLaneYUnpacked[i],
+				    hitNormalLaneZUnpacked[i]);
+	    }
+	}
+    }
+
+    intersectionResult->t = closestHitDistance;
+    intersectionResult->hitMaterialIndex = hitMaterialIndex;
+    intersectionResult->hitNormal = hitNormal;
+    
+    return anyHit;
+    
+}
 
 bool
 IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResult) {
@@ -103,7 +205,7 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
     Vector3 attenuation(1.0f, 1.0f, 1.0f);
     for (uint32_t bounceIndex = 0; bounceIndex < 8; ++bounceIndex) {    
 	WorldIntersectionResult intersectionResult = {};
-	bool isIntersect = IntersectWorld(world, &bounceRay, &intersectionResult);
+	bool isIntersect = IntersectWorldWide(world, &bounceRay, &intersectionResult);
 	++bouncesComputed;
 
 	if (isIntersect) {
@@ -257,23 +359,84 @@ int main(int argc, char** argv) {
     Sphere sphere2 = {};
     sphere2.position = Vector3(-2.0f, 1.0f, 0.0f);
     sphere2.radius = 1.0f;
-    sphere2.materialIndex = 4;
+    sphere2.materialIndex = 3;
 
     Sphere sphere3 = {};
     sphere3.position = Vector3(-4.0f, 2.0f, 1.0f);
     sphere3.radius = 1.0f;
-    sphere3.materialIndex = 3;
+    sphere3.materialIndex = 4;
     
     Sphere sphere4 = {};
     sphere4.position = Vector3(2.0f, 1.0f, -1.0f);
     sphere4.radius = 1.0f;
     sphere4.materialIndex = 5;
+
+    Sphere sphere5 = {};
+    sphere5.position = Vector3(1.0f, 3.0f, 0.0f);
+    sphere5.radius = 1.0f;
+    sphere5.materialIndex = 2;
+
+    Sphere sphere6 = {};
+    sphere6.position = Vector3(5.0f, 2.0f, -6.0f);
+    sphere6.radius = 2.0f;
+    sphere6.materialIndex = 3;
+
+    Sphere sphere7 = {};
+    sphere7.position = Vector3(-4.0f, 1.0f, 5.0f);
+    sphere7.radius = 1.0f;
+    sphere7.materialIndex = 6;
     
-    Sphere spheres[4];
+    Sphere sphere8 = {};
+    sphere8.position = Vector3(-1.0f, 1.0f, 4.0f);
+    sphere8.radius = 1.0f;
+    sphere8.materialIndex = 5;
+    
+    Sphere spheres[8];
     spheres[0] = sphere;
     spheres[1] = sphere2;
     spheres[2] = sphere3;
     spheres[3] = sphere4;
+    spheres[4] = sphere5;
+    spheres[5] = sphere6;
+    spheres[6] = sphere7;
+    spheres[7] = sphere8;
+
+    uint32_t sphereCount = sizeof(spheres) / sizeof(Sphere);
+
+    // We use AoSoA layout for sphere data. fixed simd-lane size arrays of each member.
+    uint32_t sphereSoAArrayCount = (sphereCount + LANE_WIDTH - 1) / LANE_WIDTH;
+    SphereSoALane sphereSoAArray[sphereSoAArrayCount];
+
+    for (int i = 0; i < sphereSoAArrayCount; ++i) {
+	ALIGN_LANE float spheresPositionX[LANE_WIDTH];
+	ALIGN_LANE float spheresPositionY[LANE_WIDTH];
+	ALIGN_LANE float spheresPositionZ[LANE_WIDTH];
+	ALIGN_LANE float spheresRadiusSquared[LANE_WIDTH];
+	ALIGN_LANE float spheresMaterialIndex[LANE_WIDTH];
+
+	uint32_t remainingSpheres = sphereCount - i * LANE_WIDTH;
+	uint32_t len = (remainingSpheres / LANE_WIDTH) > 0 ? LANE_WIDTH : remainingSpheres % LANE_WIDTH;
+	for (int j = 0; j < len; ++j) {
+	    uint32_t sphereIndex = j + i * LANE_WIDTH;
+	    Sphere s = spheres[sphereIndex];
+	    spheresPositionX[j] = s.position.x;
+	    spheresPositionY[j] = s.position.y;
+	    spheresPositionZ[j] = s.position.z;
+	    spheresRadiusSquared[j] = s.radius * s.radius;
+	    spheresMaterialIndex[j] = s.materialIndex;
+	}
+	
+	SphereSoALane sphereSoA = {};
+	sphereSoA.position = LaneVector3(LaneF32(spheresPositionX),
+					 LaneF32(spheresPositionY),
+					 LaneF32(spheresPositionZ));
+	sphereSoA.radiusSquared = LaneF32(spheresRadiusSquared);
+	sphereSoA.materialIndex = LaneF32(spheresMaterialIndex);
+
+	sphereSoAArray[i] = sphereSoA;
+	
+    }
+    
     
     Material defaultMaterial = {};
     defaultMaterial.color = Vector3(1.0f, 1.0f, 1.0f);
@@ -296,28 +459,36 @@ int main(int argc, char** argv) {
     sphere4Material.color = Vector3(1.0f, 1.0f, 1.0f) * 0.9f;
     sphere4Material.refractiveIndex = 1.5f;
     sphere4Material.reflection = 1.0f;
+
+    Material sphere5Material = {};
+    sphere5Material.color = Vector3(0.8f, 0.8f, 0.8f);
+    sphere5Material.reflection = 0.5f;
     
-    Material materials[6] = {};
+    Material materials[7] = {};
     materials[0] = defaultMaterial;
-    materials[plane.materialIndex] = planeMaterial;
-    materials[sphere.materialIndex] = sphereMaterial;
-    materials[sphere2.materialIndex] = sphere2Material;
-    materials[sphere3.materialIndex] = sphere3Material;
-    materials[sphere4.materialIndex] = sphere4Material;
+    materials[1] = planeMaterial;
+    materials[2] = sphereMaterial;
+    materials[3] = sphere2Material;
+    materials[4] = sphere3Material;
+    materials[5] = sphere4Material;
+    materials[6] = sphere5Material;
+
+    uint32_t materialCount = sizeof(materials) / sizeof(Material);
 
     Camera camera = CreateCamera(Vector3(0.0f, 3.0f, 10.0f));
     
     World world = {};
-    world.materialCount = 6;
+    world.materialCount = materialCount;
     world.materials = materials;
     world.planeCount = 1;
     world.planes = &plane;
-    world.sphereCount = 4;
+    world.sphereCount = sphereCount;
+    world.sphereSoAArrayCount = sphereSoAArrayCount;
+    world.sphereSoAArray = sphereSoAArray;
     world.spheres = spheres;
     world.camera = &camera;
 
     uint64_t startClock = GetTimeMilliseconds();
-    
     const uint32_t sampleSize = 512;
 
 #if SINGLE_THREAD
