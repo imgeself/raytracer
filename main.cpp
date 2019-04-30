@@ -23,7 +23,7 @@ struct WorldIntersectionResult {
     Vector3 hitNormal;
 };
 
-
+inline
 bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* intersectionResult) {
     float hitTolerance = 0.001;
     float minHitDistance = 0.001;
@@ -64,7 +64,7 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
         LaneF32 a = DotProduct(rayDirection, rayDirection);
         LaneF32 b = 2.0f * DotProduct(rayDirection, centerToOrigin);
         LaneF32 c = DotProduct(centerToOrigin, centerToOrigin) - (sphereSoA.radiusSquared);
-        LaneF32 discriminant = b * b - 4.0f * a * c;
+        LaneF32 discriminant = FMulSub(b, b, 4.0f * a * c); //b * b - 4.0f * a * c;
         LaneF32 denom = 2.0f * a;
 	
         LaneF32 squareRootMask = discriminant > 0.0f;
@@ -83,7 +83,7 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
 		Select(&closestHitDistanceLane, hitMask, hitDistance);
 		Select(&hitMaterialIndexLane, hitMask, sphereSoA.materialIndex);
             
-		LaneVector3 hitPosition = rayOrigin + rayDirection * hitDistance;
+		LaneVector3 hitPosition = FMulAdd(rayDirection, hitDistance, rayOrigin);
 		Select(&hitNormalLane, hitMask, Normalize(hitPosition - sphereSoA.position));
 		anyHit = true;
 	    }
