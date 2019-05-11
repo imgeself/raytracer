@@ -1,4 +1,6 @@
 bin/
+build/
 .DS_Store
 render.bmp
 raytracer.*
+.vs
