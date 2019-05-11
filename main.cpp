@@ -401,10 +401,10 @@ int main(int argc, char** argv) {
     spheres[6] = sphere7;
     spheres[7] = sphere8;
 
-    uint32_t sphereCount = sizeof(spheres) / sizeof(Sphere);
+	const uint32_t sphereCount = sizeof(spheres) / sizeof(Sphere);
 
     // We use AoSoA layout for sphere data. fixed simd-lane size arrays of each member.
-    uint32_t sphereSoAArrayCount = (sphereCount + LANE_WIDTH - 1) / LANE_WIDTH;
+    const uint32_t sphereSoAArrayCount = (sphereCount + LANE_WIDTH - 1) / LANE_WIDTH;
     SphereSoALane sphereSoAArray[sphereSoAArrayCount];
 
     for (int i = 0; i < sphereSoAArrayCount; ++i) {
@@ -507,7 +507,7 @@ int main(int argc, char** argv) {
     RaytraceWork(&workQueue);
     
 #else
-    uint32_t stride = 8;
+    uint32_t stride = 1;
     uint32_t totalWorkOrderCount = image.height / stride;
     WorkQueue workQueue = {};
     workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
@@ -526,7 +526,7 @@ int main(int argc, char** argv) {
 
     uint32_t threadCount = GetNumberOfProcessors();
     for (uint32_t threadIndex = 1; threadIndex < threadCount; ++threadIndex) {
-	Thread thread = CreateThread(ThreadProc, &workQueue);
+	Thread thread = CreateWorkThread(ThreadProc, &workQueue);
 	CloseThreadHandle(thread);
     }
 
