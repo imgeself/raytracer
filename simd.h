@@ -1,7 +1,11 @@
 #ifndef _SIMD_H_
 #define _SIMD_H_
 
+#ifdef PLATFORM_WIN32
+#include <intrin.h>
+#else
 #include <x86intrin.h>
+#endif
 
 #define ALIGN(X) alignas(X)
 
@@ -108,7 +112,7 @@ inline LaneF32 FMulAdd(const LaneF32 left, const LaneF32 right, const LaneF32 ad
 #ifdef __FMA__
     result.m = _mm256_fmadd_ps(left.m, right.m, addend.m);
 #else
-    result.m = (left.m * right.m) + addend.m;
+    result = (left * right) + addend;
 #endif
 
     return result;
@@ -119,7 +123,7 @@ inline LaneF32 FMulSub(const LaneF32 left, const LaneF32 right, const LaneF32 su
 #ifdef __FMA__
     result.m = _mm256_fmsub_ps(left.m, right.m, sub.m);
 #else
-    result.m = (left.m * right.m) - sub.m;
+    result = (left * right) - sub;
 #endif
 
     return result;
@@ -248,7 +252,7 @@ inline LaneF32 FMulAdd(const LaneF32 left, const LaneF32 right, const LaneF32 ad
 #ifdef __FMA__
     result.m = _mm_fmadd_ps(left.m, right.m, addend.m);
 #else
-    result.m = (left.m * right.m) + addend.m;
+    result = (left * right) + addend;
 #endif
     return result;
 };
@@ -258,7 +262,7 @@ inline LaneF32 FMulSub(const LaneF32 left, const LaneF32 right, const LaneF32 su
 #ifdef __FMA__
     result.m = _mm_fmsub_ps(left.m, right.m, sub.m);
 #else
-    result.m = (left.m * right.m) - sub.m;
+    result = (left * right) - sub;
 #endif
 
     return result;
