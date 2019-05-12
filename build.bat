@@ -12,6 +12,6 @@ pushd .\bin\
 cl %compilerFlags% ..\main.cpp 
 IF %ERRORLEVEL%==0 (
     .\main.exe
-	start render.bmp
+    start render.bmp
 )
 popd

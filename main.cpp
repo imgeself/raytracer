@@ -44,7 +44,7 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
                 closestHitDistance = hitDistance;
                 hitMaterialIndex = plane.materialIndex;
                 hitNormal = plane.normal;
-		anyHit = true;
+                anyHit = true;
             }
         }
     }
@@ -58,61 +58,61 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     LaneVector3 hitNormalLane = LaneVector3(hitNormal);
 
     for (int sphereLaneIndex = 0; sphereLaneIndex < world->sphereSoAArrayCount; ++sphereLaneIndex) {	
-	SphereSoALane sphereSoA = world->sphereSoAArray[sphereLaneIndex];
-	
-	LaneVector3 centerToOrigin = rayOrigin - sphereSoA.position;
+        SphereSoALane sphereSoA = world->sphereSoAArray[sphereLaneIndex];
+    
+        LaneVector3 centerToOrigin = rayOrigin - sphereSoA.position;
         LaneF32 a = DotProduct(rayDirection, rayDirection);
         LaneF32 b = 2.0f * DotProduct(rayDirection, centerToOrigin);
         LaneF32 c = DotProduct(centerToOrigin, centerToOrigin) - (sphereSoA.radiusSquared);
         LaneF32 discriminant = FMulSub(b, b, 4.0f * a * c); //b * b - 4.0f * a * c;
         LaneF32 denom = 2.0f * a;
-	
+    
         LaneF32 squareRootMask = discriminant > 0.0f;
-	if (!MaskIsZeroed(squareRootMask)) {
-	    LaneF32 tp = (-b + SquareRoot(discriminant)) / denom;
-	    LaneF32 tn = (-b - SquareRoot(discriminant)) / denom;
+        if (!MaskIsZeroed(squareRootMask)) {
+            LaneF32 tp = (-b + SquareRoot(discriminant)) / denom;
+            LaneF32 tn = (-b - SquareRoot(discriminant)) / denom;
             
-	    LaneF32 hitDistance = tp;
-	    LaneF32 pickMask = (tn > minHitDistance & tn < tp);
-	    Select(&hitDistance, pickMask, tn);   
+            LaneF32 hitDistance = tp;
+            LaneF32 pickMask = (tn > minHitDistance & tn < tp);
+            Select(&hitDistance, pickMask, tn);   
             
-	    LaneF32 tMask = (hitDistance > minHitDistance & hitDistance < closestHitDistanceLane);
-	    LaneF32 hitMask = (squareRootMask & tMask);
+            LaneF32 tMask = (hitDistance > minHitDistance & hitDistance < closestHitDistanceLane);
+            LaneF32 hitMask = (squareRootMask & tMask);
 
-	    if (!MaskIsZeroed(hitMask)) {	
-		Select(&closestHitDistanceLane, hitMask, hitDistance);
-		Select(&hitMaterialIndexLane, hitMask, sphereSoA.materialIndex);
+            if (!MaskIsZeroed(hitMask)) {	
+            Select(&closestHitDistanceLane, hitMask, hitDistance);
+            Select(&hitMaterialIndexLane, hitMask, sphereSoA.materialIndex);
             
-		LaneVector3 hitPosition = FMulAdd(rayDirection, hitDistance, rayOrigin);
-		Select(&hitNormalLane, hitMask, Normalize(hitPosition - sphereSoA.position));
-		anyHit = true;
-	    }
-	}
+            LaneVector3 hitPosition = FMulAdd(rayDirection, hitDistance, rayOrigin);
+            Select(&hitNormalLane, hitMask, Normalize(hitPosition - sphereSoA.position));
+            anyHit = true;
+            }
+        }
     }
 
     if (anyHit) {
-	// After calculating n sphere ray intersection, we have to find which one is closer.
-	// This is probably the most naive way to do it. We store lane values into an array and iterating through to find any close hit. 
-	ALIGN_LANE float closestHitDistanceLaneUnpacked[LANE_WIDTH];
-	ALIGN_LANE float hitMaterialIndexLaneUnpacked[LANE_WIDTH];
-	ALIGN_LANE float hitNormalLaneXUnpacked[LANE_WIDTH];
-	ALIGN_LANE float hitNormalLaneYUnpacked[LANE_WIDTH];
-	ALIGN_LANE float hitNormalLaneZUnpacked[LANE_WIDTH];
-	StoreLane(closestHitDistanceLaneUnpacked, closestHitDistanceLane);
-	StoreLane(hitMaterialIndexLaneUnpacked, hitMaterialIndexLane);
-	StoreLane(hitNormalLaneXUnpacked, hitNormalLane.x);
-	StoreLane(hitNormalLaneYUnpacked, hitNormalLane.y);
-	StoreLane(hitNormalLaneZUnpacked, hitNormalLane.z);
-	for (int i = 0; i < LANE_WIDTH; ++i) {
-	    float t = closestHitDistanceLaneUnpacked[i];
-	    if (t < closestHitDistance) {
-		closestHitDistance = t;
-		hitMaterialIndex = hitMaterialIndexLaneUnpacked[i];
-		hitNormal = Vector3(hitNormalLaneXUnpacked[i],
-				    hitNormalLaneYUnpacked[i],
-				    hitNormalLaneZUnpacked[i]);
-	    }
-	}
+        // After calculating n sphere ray intersection, we have to find which one is closer.
+        // This is probably the most naive way to do it. We store lane values into an array and iterating through to find any close hit. 
+        ALIGN_LANE float closestHitDistanceLaneUnpacked[LANE_WIDTH];
+        ALIGN_LANE float hitMaterialIndexLaneUnpacked[LANE_WIDTH];
+        ALIGN_LANE float hitNormalLaneXUnpacked[LANE_WIDTH];
+        ALIGN_LANE float hitNormalLaneYUnpacked[LANE_WIDTH];
+        ALIGN_LANE float hitNormalLaneZUnpacked[LANE_WIDTH];
+        StoreLane(closestHitDistanceLaneUnpacked, closestHitDistanceLane);
+        StoreLane(hitMaterialIndexLaneUnpacked, hitMaterialIndexLane);
+        StoreLane(hitNormalLaneXUnpacked, hitNormalLane.x);
+        StoreLane(hitNormalLaneYUnpacked, hitNormalLane.y);
+        StoreLane(hitNormalLaneZUnpacked, hitNormalLane.z);
+        for (int i = 0; i < LANE_WIDTH; ++i) {
+            float t = closestHitDistanceLaneUnpacked[i];
+            if (t < closestHitDistance) {
+                closestHitDistance = t;
+                hitMaterialIndex = hitMaterialIndexLaneUnpacked[i];
+                hitNormal = Vector3(hitNormalLaneXUnpacked[i], 
+                                    hitNormalLaneYUnpacked[i],
+                                    hitNormalLaneZUnpacked[i]);
+            }
+        }
     }
 
     intersectionResult->t = closestHitDistance;
@@ -153,16 +153,16 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
         if (discriminant > 0) {
             float tp = (-b + sqrtf(discriminant)) / denom;
             float tn = (-b - sqrtf(discriminant)) / denom;
-            
+
             float hitDistance = tp;
             if (tn > minHitDistance && tn < tp) {
                 hitDistance = tn;
             }
-            
+
             if (hitDistance > minHitDistance && hitDistance < intersectionResult->t) {
                 intersectionResult->t = hitDistance;
                 intersectionResult->hitMaterialIndex = sphere.materialIndex;
-                
+
                 Vector3 hitPosition = ray->origin + ray->direction * hitDistance;
                 intersectionResult->hitNormal = Normalize(hitPosition - sphere.position);
             }
@@ -204,62 +204,59 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
 
     Vector3 attenuation(1.0f, 1.0f, 1.0f);
     for (uint32_t bounceIndex = 0; bounceIndex < 8; ++bounceIndex) {    
-	WorldIntersectionResult intersectionResult = {};
-	bool isIntersect = IntersectWorldWide(world, &bounceRay, &intersectionResult);
-	++bouncesComputed;
+        WorldIntersectionResult intersectionResult = {};
+        bool isIntersect = IntersectWorldWide(world, &bounceRay, &intersectionResult);
+        ++bouncesComputed;
 
-	if (isIntersect) {
-	    Material mat = world->materials[intersectionResult.hitMaterialIndex];
+        if (isIntersect) {
+            Material mat = world->materials[intersectionResult.hitMaterialIndex];
 
-	    result = attenuation;
-	    attenuation *= mat.color;
-	    bounceRay.origin = bounceRay.origin + bounceRay.direction * intersectionResult.t;
+            result = attenuation;
+            attenuation *= mat.color;
+            bounceRay.origin = bounceRay.origin + bounceRay.direction * intersectionResult.t;
 
-	   
-	    
-	    Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal *
-		DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
-	    Vector3 randomBounce = intersectionResult.hitNormal +
-		Vector3(RandomBilateral(randomState),
-			RandomBilateral(randomState),
-			RandomBilateral(randomState));
-	    Vector3 reflectedRay = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
+       
+        
+            Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal *
+            DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
+            Vector3 randomBounce = intersectionResult.hitNormal +
+            Vector3(RandomBilateral(randomState),
+                RandomBilateral(randomState),
+                RandomBilateral(randomState));
+            Vector3 reflectedRay = Normalize(Lerp(randomBounce, mat.reflection, mirrorBounce));
 
-	     // Fresnel coefficient is between 0 and 1. We start with 1 which is full reflection, no refraction.
-	    float fresnelCoefficient = 1.0;
-	    Vector3 refractedRay = reflectedRay;
+             // Fresnel coefficient is between 0 and 1. We start with 1 which is full reflection, no refraction.
+            float fresnelCoefficient = 1.0;
+            Vector3 refractedRay = reflectedRay;
 
-	    if (mat.refractiveIndex != 0.0f) {
-		bool isRefract = Refract(bounceRay.direction, intersectionResult.hitNormal,
-	    			     mat.refractiveIndex, &refractedRay);
-		if (isRefract) {
-		    // Refractive material
-		    refractedRay = Normalize(refractedRay);
+            if (mat.refractiveIndex != 0.0f) {
+                bool isRefract = Refract(bounceRay.direction, intersectionResult.hitNormal,
+                                 mat.refractiveIndex, &refractedRay);
+                if (isRefract) {
+                    // Refractive material
+                    refractedRay = Normalize(refractedRay);
 
-		    // We use the Schlick Approximation for getting fresnel coefficient. It's okay for our purposes.
-		    // NOTE: We can use actual Fresnel Equations for making the image little bit more realistic.
-		    fresnelCoefficient = Schlick(bounceRay.direction, intersectionResult.hitNormal,
-						 mat.refractiveIndex);
-		}
-	    }
+                    // We use the Schlick Approximation for getting fresnel coefficient. It's okay for our purposes.
+                    // NOTE: We can use actual Fresnel Equations for making the image little bit more realistic.
+                    fresnelCoefficient = Schlick(bounceRay.direction, intersectionResult.hitNormal,
+                                 mat.refractiveIndex);
+                }
+            }
 
-	    // We use the Russian Roulette method for determining which way to go. It fits our architecture.
-	    // We might do calculate reflected and refracted ray separately and apply linear interpolation
-	    // between them by coefficient given from the Fresnel Equations.
-	    if (RandomUnilateral(randomState) <= fresnelCoefficient) {
-		bounceRay.direction = reflectedRay;
-	    } else {
-		bounceRay.direction = refractedRay;
-	    }
-	    	
-	    
-	} else {
-	    // Hit nothing (sky)
-	    // We just return attenuation for now. No sky color or sky emmiter.
-	    result = attenuation;
-	    break;
-	}
-	
+            // We use the Russian Roulette method for determining which way to go. It fits our architecture.
+            // We might do calculate reflected and refracted ray separately and apply linear interpolation
+            // between them by coefficient given from the Fresnel Equations.
+            if (RandomUnilateral(randomState) <= fresnelCoefficient) {
+                bounceRay.direction = reflectedRay;
+            } else {
+                bounceRay.direction = refractedRay;
+            }
+        } else {
+            // Hit nothing (sky)
+            // We just return attenuation for now. No sky color or sky emmiter.
+            result = attenuation;
+            break;
+        }
     }
 
     *bounceCount += bouncesComputed;
@@ -270,7 +267,7 @@ bool RaytraceWork(WorkQueue* workQueue) {
 
     uint32_t nextOrderToDo = InterlockedAddAndReturnPrevious(&workQueue->nextOrderToDo, 1);
     if (nextOrderToDo >= workQueue->workOrderCount) {
-	return false;
+        return false;
     }
 
     WorkOrder workOrder = workQueue->workOrders[nextOrderToDo];
@@ -287,10 +284,10 @@ bool RaytraceWork(WorkQueue* workQueue) {
     Vector3 cameraZ = camera->zVec;
     Vector3 cameraX = camera->xVec;
     Vector3 cameraY = camera->yVec;
-    
+
     float filmDistance = 1.0;
     Vector3 filmCenter = cameraPosition - cameraZ * filmDistance;
-    
+
     float filmWidth = 1.0f * imageAspectRatio;
     float filmHeight = 1.0f;
     
@@ -308,20 +305,20 @@ bool RaytraceWork(WorkQueue* workQueue) {
         float filmY = ((float) y / (float) image->height) * -2.0f + 1.0f;
         for (int32_t x = 0; x < image->width; ++x) {
             float filmX = (((float) x / (float) image->width) * 2.0f - 1.0f);
-	    
-	    Vector3 color(0.0f, 0.0f, 0.0f);
-	    for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
-		float offsetX = filmX + RandomBilateral(&randomState) * halfPixelWidth;
-		float offsetY = filmY + RandomBilateral(&randomState) * halfPixelHeight;
-		
-		Vector3 filmPosition = filmCenter + cameraX * offsetX * halfFilmWidth + cameraY * halfFilmHeight * offsetY;
-		
-		Ray ray = {};
-		ray.origin = cameraPosition;
-		ray.direction = Normalize(filmPosition - cameraPosition);
+        
+            Vector3 color(0.0f, 0.0f, 0.0f);
+            for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
+                float offsetX = filmX + RandomBilateral(&randomState) * halfPixelWidth;
+                float offsetY = filmY + RandomBilateral(&randomState) * halfPixelHeight;
+        
+                Vector3 filmPosition = filmCenter + cameraX * offsetX * halfFilmWidth + cameraY * halfFilmHeight * offsetY;
+        
+                Ray ray = {};
+                ray.origin = cameraPosition;
+                ray.direction = Normalize(filmPosition - cameraPosition);
 
-		color += RaytraceWorld(world, &ray, &randomState, workQueue, &totalBounces);
-	    }
+                color += RaytraceWorld(world, &ray, &randomState, workQueue, &totalBounces);
+            }
             
             *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
         }
@@ -341,7 +338,7 @@ THREAD_PROC_RET ThreadProc(void* arguments) {
 
 int main(int argc, char** argv) {
     Image image = CreateImage(1280, 720);
-	
+
     // Y is up.
     Vector3 globalUpVector = Vector3(0.0f, 1.0f, 0.0f);
 
@@ -401,40 +398,40 @@ int main(int argc, char** argv) {
     spheres[6] = sphere7;
     spheres[7] = sphere8;
 
-	const uint32_t sphereCount = sizeof(spheres) / sizeof(Sphere);
+    const uint32_t sphereCount = sizeof(spheres) / sizeof(Sphere);
 
     // We use AoSoA layout for sphere data. fixed simd-lane size arrays of each member.
     const uint32_t sphereSoAArrayCount = (sphereCount + LANE_WIDTH - 1) / LANE_WIDTH;
     SphereSoALane sphereSoAArray[sphereSoAArrayCount];
 
     for (int i = 0; i < sphereSoAArrayCount; ++i) {
-	ALIGN_LANE float spheresPositionX[LANE_WIDTH];
-	ALIGN_LANE float spheresPositionY[LANE_WIDTH];
-	ALIGN_LANE float spheresPositionZ[LANE_WIDTH];
-	ALIGN_LANE float spheresRadiusSquared[LANE_WIDTH];
-	ALIGN_LANE float spheresMaterialIndex[LANE_WIDTH];
+        ALIGN_LANE float spheresPositionX[LANE_WIDTH];
+        ALIGN_LANE float spheresPositionY[LANE_WIDTH];
+        ALIGN_LANE float spheresPositionZ[LANE_WIDTH];
+        ALIGN_LANE float spheresRadiusSquared[LANE_WIDTH];
+        ALIGN_LANE float spheresMaterialIndex[LANE_WIDTH];
 
-	uint32_t remainingSpheres = sphereCount - i * LANE_WIDTH;
-	uint32_t len = (remainingSpheres / LANE_WIDTH) > 0 ? LANE_WIDTH : remainingSpheres % LANE_WIDTH;
-	for (int j = 0; j < len; ++j) {
-	    uint32_t sphereIndex = j + i * LANE_WIDTH;
-	    Sphere s = spheres[sphereIndex];
-	    spheresPositionX[j] = s.position.x;
-	    spheresPositionY[j] = s.position.y;
-	    spheresPositionZ[j] = s.position.z;
-	    spheresRadiusSquared[j] = s.radius * s.radius;
-	    spheresMaterialIndex[j] = s.materialIndex;
-	}
-	
-	SphereSoALane sphereSoA = {};
-	sphereSoA.position = LaneVector3(LaneF32(spheresPositionX),
-					 LaneF32(spheresPositionY),
-					 LaneF32(spheresPositionZ));
-	sphereSoA.radiusSquared = LaneF32(spheresRadiusSquared);
-	sphereSoA.materialIndex = LaneF32(spheresMaterialIndex);
+        uint32_t remainingSpheres = sphereCount - i * LANE_WIDTH;
+        uint32_t len = (remainingSpheres / LANE_WIDTH) > 0 ? LANE_WIDTH : remainingSpheres % LANE_WIDTH;
+        for (int j = 0; j < len; ++j) {
+            uint32_t sphereIndex = j + i * LANE_WIDTH;
+            Sphere s = spheres[sphereIndex];
+            spheresPositionX[j] = s.position.x;
+            spheresPositionY[j] = s.position.y;
+            spheresPositionZ[j] = s.position.z;
+            spheresRadiusSquared[j] = s.radius * s.radius;
+            spheresMaterialIndex[j] = s.materialIndex;
+        }
+    
+        SphereSoALane sphereSoA = {};
+        sphereSoA.position = LaneVector3(LaneF32(spheresPositionX),
+                         LaneF32(spheresPositionY),
+                         LaneF32(spheresPositionZ));
+        sphereSoA.radiusSquared = LaneF32(spheresRadiusSquared);
+        sphereSoA.materialIndex = LaneF32(spheresMaterialIndex);
 
-	sphereSoAArray[i] = sphereSoA;
-	
+        sphereSoAArray[i] = sphereSoA;
+    
     }
     
     
@@ -515,26 +512,26 @@ int main(int argc, char** argv) {
 
     uint32_t counter = 0;
     for (uint32_t rowIndex = 0; rowIndex < totalWorkOrderCount; ++rowIndex) {
-	WorkOrder* workOrder = workQueue.workOrders + rowIndex;
-	workOrder->image = &image;
-	workOrder->world = &world;
-	workOrder->startRowIndex = counter;
-	counter += stride;
-	workOrder->endRowIndex = counter;
-	workOrder->sampleSize = sampleSize;
+        WorkOrder* workOrder = workQueue.workOrders + rowIndex;
+        workOrder->image = &image;
+        workOrder->world = &world;
+        workOrder->startRowIndex = counter;
+        counter += stride;
+        workOrder->endRowIndex = counter;
+        workOrder->sampleSize = sampleSize;
     }
 
     uint32_t threadCount = GetNumberOfProcessors();
     for (uint32_t threadIndex = 1; threadIndex < threadCount; ++threadIndex) {
-	Thread thread = CreateWorkThread(ThreadProc, &workQueue);
-	CloseThreadHandle(thread);
+        Thread thread = CreateWorkThread(ThreadProc, &workQueue);
+        CloseThreadHandle(thread);
     }
 
     while (workQueue.finishedOrderCount < totalWorkOrderCount) {
-	if (RaytraceWork(&workQueue)) {
-	    fprintf(stdout, "Raytracing %.0f%%...\r", 100 * ((float) workQueue.finishedOrderCount / totalWorkOrderCount));
-	    fflush(stdout);
-	}
+        if (RaytraceWork(&workQueue)) {
+            fprintf(stdout, "Raytracing %.0f%%...\r", 100 * ((float) workQueue.finishedOrderCount / totalWorkOrderCount));
+            fflush(stdout);
+        }
     }
 #endif
 
@@ -545,7 +542,7 @@ int main(int argc, char** argv) {
     printf("Raytracing time: %llums\n", timeElapsedMs);
     printf("Total computed rays: %llu\n", bouncesComputed);
     printf("Performance: %.1fMray/s, %fms/ray\n", (bouncesComputed / 1000.0) / timeElapsedMs,
-	   (double) timeElapsedMs / (double) bouncesComputed);
+       (double) timeElapsedMs / (double) bouncesComputed);
     
     WriteImageFile(&image, "render.bmp");
     return 0;

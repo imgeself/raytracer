@@ -10,32 +10,32 @@
 
 inline float Clamp(float low, float value, float high) {
     if (value < low) {
-	return low;
+        return low;
     } else if (value > high) {
-	return high;
+        return high;
     } else {
-	return value;
+        return value;
     }
 }
 
 inline float DotProduct(const Vector3 v1, const Vector3 v2) {
-  return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
 inline Vector3 CrossProduct(const Vector3 v1, const Vector3 v2) {
-  return Vector3(v1.y * v2.z - v1.z * v2.y,
-	       v1.z * v2.x - v1.x * v2.z,
-	       v1.x * v2.y - v1.y * v2.x);
+    return Vector3(v1.y * v2.z - v1.z * v2.y,
+                   v1.z * v2.x - v1.x * v2.z,
+                   v1.x * v2.y - v1.y * v2.x);
 }
 
 inline float Lenght(const Vector3 v) {
-  return sqrtf(DotProduct(v, v));
+    return sqrtf(DotProduct(v, v));
 }
 
 inline Vector3 Normalize(const Vector3 v) {
-  const float dot = DotProduct(v, v);
-  const float factor = 1 / sqrtf(dot);
-  return Vector3(v.x * factor, v.y * factor, v.z * factor);
+    const float dot = DotProduct(v, v);
+    const float factor = 1 / sqrtf(dot);
+    return Vector3(v.x * factor, v.y * factor, v.z * factor);
 }
 
 inline Vector3 Lerp(Vector3 left, float factor, Vector3 right) {
@@ -63,42 +63,42 @@ inline float RandomBilateral(uint32_t *state) {
 }
 
 inline bool Refract(Vector3 incidentVector, Vector3 normal,
-		    float refractiveIndex, Vector3* refractionDirection) {
+            float refractiveIndex, Vector3* refractionDirection) {
     // Clamp cos value for avoiding any NaN errors;
     float cosIncidentAngle = Clamp(-1.0f, DotProduct(incidentVector, normal), 1.0f);
     Vector3 hitNormal = normal;
     float refractiveIndexRatio;
     // NOTE: we assume incident ray comes from the air which has refraction index equals 1.
     if (cosIncidentAngle < 0) {
-	// We are coming from outside the surface
-	cosIncidentAngle = -cosIncidentAngle;
-	refractiveIndexRatio = 1.0 / refractiveIndex;
+    // We are coming from outside the surface
+    cosIncidentAngle = -cosIncidentAngle;
+    refractiveIndexRatio = 1.0 / refractiveIndex;
     } else {
-	hitNormal = -normal;
-	refractiveIndexRatio = refractiveIndex; // / 1.0f
+    hitNormal = -normal;
+    refractiveIndexRatio = refractiveIndex; // / 1.0f
     }
 
     float discriminant = 1 - refractiveIndexRatio * refractiveIndexRatio *
-	(1 - cosIncidentAngle * cosIncidentAngle);
+                        (1 - cosIncidentAngle * cosIncidentAngle);
     // If discriminant lower than 0 we cannot refract the other medium.
     // This is called total internal reflection.
     if (discriminant < 0) {
-	return false;
+        return false;
     } else {
-	*refractionDirection = incidentVector * refractiveIndexRatio + hitNormal *
-	    (refractiveIndexRatio * cosIncidentAngle - sqrtf(discriminant));
-	return true;
+        *refractionDirection = incidentVector * refractiveIndexRatio + hitNormal *
+                    (refractiveIndexRatio * cosIncidentAngle - sqrtf(discriminant));
+        return true;
     }
 }
 
 inline float Schlick(Vector3 incidentVector, Vector3 normal,
-		     float refractiveIndex) {
+                     float refractiveIndex) {
     float cosIncidentAngle = Clamp(-1.0f, DotProduct(incidentVector, normal), 1.0f);
     float cosine;
     if (cosIncidentAngle > 0) {
-	cosine = cosIncidentAngle;
+        cosine = cosIncidentAngle;
     } else {
-	cosine = -cosIncidentAngle;
+        cosine = -cosIncidentAngle;
     }
     float r0 = (1 - refractiveIndex) / (1 + refractiveIndex);
     r0 = r0 * r0;
@@ -106,17 +106,17 @@ inline float Schlick(Vector3 incidentVector, Vector3 normal,
 } 
 
 inline uint32_t RGBPackToUInt32(Vector3 color) {
-  return (255 << 24 |
-	  (int32_t) (255 * color.x) << 16 |
-	  (int32_t) (255 * color.y) << 8 |
-	  (int32_t) (255 * color.z) << 0);
+    return (255 << 24 |
+      (int32_t) (255 * color.x) << 16 |
+      (int32_t) (255 * color.y) << 8 |
+      (int32_t) (255 * color.z) << 0);
 }
 
 inline uint32_t RGBPackToUInt32WithGamma2(Vector3 color) {
-  return (255 << 24 |
-	  (int32_t) (255 * sqrtf(color.x)) << 16 |
-	  (int32_t) (255 * sqrtf(color.y)) << 8 |
-	  (int32_t) (255 * sqrtf(color.z)) << 0);
+    return (255 << 24 |
+      (int32_t) (255 * sqrtf(color.x)) << 16 |
+      (int32_t) (255 * sqrtf(color.y)) << 8 |
+      (int32_t) (255 * sqrtf(color.z)) << 0);
 }
 
 #endif
