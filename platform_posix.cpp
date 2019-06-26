@@ -8,7 +8,7 @@ struct Thread {
     pthread_t handle;
 };
 
-inline Thread CreateThread(THREAD_PROC_RET (*startFunc) (void*), void* arguments) {
+inline Thread CreateWorkThread(THREAD_PROC_RET (*startFunc) (void*), void* arguments) {
     pthread_t thread;
     pthread_create(&thread, NULL, startFunc, arguments);
     

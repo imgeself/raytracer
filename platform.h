@@ -18,7 +18,7 @@ inline uint32_t GetNumberOfProcessors();
 
 struct Thread;
 
-inline Thread CreateWorkThread(THREAD_PROC_RET (*startFunc) (LPVOID), void* arguments);
+inline Thread CreateWorkThread(THREAD_PROC_RET (*startFunc) (void*), void* arguments);
 inline void CloseThreadHandle(Thread thread);
 
 // Atomics
@@ -36,7 +36,7 @@ inline uint32_t InterlockedAddAndReturnPrevious(volatile uint32_t* dest, uint32_
 #elif PLATFORM_WIN32
 #include "platform_win32.cpp"
 #else
-#error "Current platform functions not implemented"
+#include "platform_linux.cpp"
 #endif
 
 #endif
