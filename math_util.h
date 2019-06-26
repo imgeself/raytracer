@@ -112,11 +112,29 @@ inline uint32_t RGBPackToUInt32(Vector3 color) {
       (int32_t) (255 * color.z) << 0);
 }
 
+inline float LinearTosRGB(float value) {
+    value = Clamp(0.0f, value, 1.0f);
+
+    float result = value * 12.92f;
+    if (value >= 0.0031308f) {
+        result = (1.055f * pow(value, 1.0f / 2.4f)) - 0.055f;
+    }
+
+    return result;
+}
+
 inline uint32_t RGBPackToUInt32WithGamma2(Vector3 color) {
     return (255 << 24 |
       (int32_t) (255 * sqrtf(color.x)) << 16 |
       (int32_t) (255 * sqrtf(color.y)) << 8 |
       (int32_t) (255 * sqrtf(color.z)) << 0);
+}
+
+inline uint32_t RGBPackToUInt32WithsRGB(Vector3 color) {
+    return (255 << 24 |
+        (int32_t)(255 * LinearTosRGB(color.x)) << 16 |
+        (int32_t)(255 * LinearTosRGB(color.y)) << 8 |
+        (int32_t)(255 * LinearTosRGB(color.z)) << 0);
 }
 
 #endif
