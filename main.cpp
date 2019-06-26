@@ -80,12 +80,12 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
             LaneF32 hitMask = (squareRootMask & tMask);
 
             if (!MaskIsZeroed(hitMask)) {	
-            Select(&closestHitDistanceLane, hitMask, hitDistance);
-            Select(&hitMaterialIndexLane, hitMask, sphereSoA.materialIndex);
+                Select(&closestHitDistanceLane, hitMask, hitDistance);
+                Select(&hitMaterialIndexLane, hitMask, sphereSoA.materialIndex);
             
-            LaneVector3 hitPosition = FMulAdd(rayDirection, hitDistance, rayOrigin);
-            Select(&hitNormalLane, hitMask, Normalize(hitPosition - sphereSoA.position));
-            anyHit = true;
+                LaneVector3 hitPosition = FMulAdd(rayDirection, hitDistance, rayOrigin);
+                Select(&hitNormalLane, hitMask, Normalize(hitPosition - sphereSoA.position));
+                anyHit = true;
             }
         }
     }
@@ -108,7 +108,7 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
             if (t < closestHitDistance) {
                 closestHitDistance = t;
                 hitMaterialIndex = hitMaterialIndexLaneUnpacked[i];
-                hitNormal = Vector3(hitNormalLaneXUnpacked[i], 
+                hitNormal = Vector3(hitNormalLaneXUnpacked[i],
                                     hitNormalLaneYUnpacked[i],
                                     hitNormalLaneZUnpacked[i]);
             }
@@ -118,9 +118,8 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     intersectionResult->t = closestHitDistance;
     intersectionResult->hitMaterialIndex = hitMaterialIndex;
     intersectionResult->hitNormal = hitNormal;
-    
+
     return anyHit;
-    
 }
 
 bool
@@ -208,14 +207,14 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
         bool isIntersect = IntersectWorldWide(world, &bounceRay, &intersectionResult);
         ++bouncesComputed;
 
+        Material mat = world->materials[intersectionResult.hitMaterialIndex];
         if (isIntersect) {
-            Material mat = world->materials[intersectionResult.hitMaterialIndex];
 
-            result = attenuation;
+            //result = attenuation;
+            //attenuation *= mat.color;
+            result += attenuation * mat.emitColor;
             attenuation *= mat.color;
             bounceRay.origin = bounceRay.origin + bounceRay.direction * intersectionResult.t;
-
-       
         
             Vector3 mirrorBounce = bounceRay.direction - intersectionResult.hitNormal *
             DotProduct(intersectionResult.hitNormal, bounceRay.direction) * 2.0f;
@@ -254,7 +253,8 @@ Vector3 RaytraceWorld(World* world, Ray* ray, uint32_t* randomState, WorkQueue* 
         } else {
             // Hit nothing (sky)
             // We just return attenuation for now. No sky color or sky emmiter.
-            result = attenuation;
+            result += attenuation * mat.emitColor;
+            //result = attenuation;
             break;
         }
     }
@@ -320,7 +320,7 @@ bool RaytraceWork(WorkQueue* workQueue) {
                 color += RaytraceWorld(world, &ray, &randomState, workQueue, &totalBounces);
             }
             
-            *frameBuffer++ = RGBPackToUInt32WithGamma2(color / sampleSize);
+            *frameBuffer++ = RGBPackToUInt32WithsRGB(color / sampleSize);
         }
     }
 
@@ -339,164 +339,20 @@ THREAD_PROC_RET ThreadProc(void* arguments) {
 int main(int argc, char** argv) {
     Image image = CreateImage(1280, 720);
 
-    // Y is up.
-    Vector3 globalUpVector = Vector3(0.0f, 1.0f, 0.0f);
-
-    // Generate scene
-    Plane plane = {};
-    plane.normal = globalUpVector;
-    plane.d = 0;
-    plane.materialIndex = 1;
-    
-    Sphere sphere = {};
-    sphere.position = Vector3(0.0f, 1.0f, 0.0f);
-    sphere.radius = 1.0f;
-    sphere.materialIndex = 2;
-
-    Sphere sphere2 = {};
-    sphere2.position = Vector3(-2.0f, 1.0f, 0.0f);
-    sphere2.radius = 1.0f;
-    sphere2.materialIndex = 3;
-
-    Sphere sphere3 = {};
-    sphere3.position = Vector3(-4.0f, 2.0f, 1.0f);
-    sphere3.radius = 1.0f;
-    sphere3.materialIndex = 4;
-    
-    Sphere sphere4 = {};
-    sphere4.position = Vector3(2.0f, 1.0f, -1.0f);
-    sphere4.radius = 1.0f;
-    sphere4.materialIndex = 5;
-
-    Sphere sphere5 = {};
-    sphere5.position = Vector3(1.0f, 3.0f, 0.0f);
-    sphere5.radius = 1.0f;
-    sphere5.materialIndex = 2;
-
-    Sphere sphere6 = {};
-    sphere6.position = Vector3(5.0f, 2.0f, -6.0f);
-    sphere6.radius = 2.0f;
-    sphere6.materialIndex = 3;
-
-    Sphere sphere7 = {};
-    sphere7.position = Vector3(-4.0f, 1.0f, 5.0f);
-    sphere7.radius = 1.0f;
-    sphere7.materialIndex = 6;
-    
-    Sphere sphere8 = {};
-    sphere8.position = Vector3(-1.0f, 1.0f, 4.0f);
-    sphere8.radius = 1.0f;
-    sphere8.materialIndex = 5;
-    
-    Sphere spheres[8];
-    spheres[0] = sphere;
-    spheres[1] = sphere2;
-    spheres[2] = sphere3;
-    spheres[3] = sphere4;
-    spheres[4] = sphere5;
-    spheres[5] = sphere6;
-    spheres[6] = sphere7;
-    spheres[7] = sphere8;
-
-    const uint32_t sphereCount = sizeof(spheres) / sizeof(Sphere);
-
-    // We use AoSoA layout for sphere data. fixed simd-lane size arrays of each member.
-    const uint32_t sphereSoAArrayCount = (sphereCount + LANE_WIDTH - 1) / LANE_WIDTH;
-    SphereSoALane sphereSoAArray[sphereSoAArrayCount];
-
-    for (int i = 0; i < sphereSoAArrayCount; ++i) {
-        ALIGN_LANE float spheresPositionX[LANE_WIDTH];
-        ALIGN_LANE float spheresPositionY[LANE_WIDTH];
-        ALIGN_LANE float spheresPositionZ[LANE_WIDTH];
-        ALIGN_LANE float spheresRadiusSquared[LANE_WIDTH];
-        ALIGN_LANE float spheresMaterialIndex[LANE_WIDTH];
-
-        uint32_t remainingSpheres = sphereCount - i * LANE_WIDTH;
-        uint32_t len = (remainingSpheres / LANE_WIDTH) > 0 ? LANE_WIDTH : remainingSpheres % LANE_WIDTH;
-        for (int j = 0; j < len; ++j) {
-            uint32_t sphereIndex = j + i * LANE_WIDTH;
-            Sphere s = spheres[sphereIndex];
-            spheresPositionX[j] = s.position.x;
-            spheresPositionY[j] = s.position.y;
-            spheresPositionZ[j] = s.position.z;
-            spheresRadiusSquared[j] = s.radius * s.radius;
-            spheresMaterialIndex[j] = s.materialIndex;
-        }
-    
-        SphereSoALane sphereSoA = {};
-        sphereSoA.position = LaneVector3(LaneF32(spheresPositionX),
-                         LaneF32(spheresPositionY),
-                         LaneF32(spheresPositionZ));
-        sphereSoA.radiusSquared = LaneF32(spheresRadiusSquared);
-        sphereSoA.materialIndex = LaneF32(spheresMaterialIndex);
-
-        sphereSoAArray[i] = sphereSoA;
-    
-    }
-    
-    
-    Material defaultMaterial = {};
-    defaultMaterial.color = Vector3(1.0f, 1.0f, 1.0f);
-    
-    Material planeMaterial = {};
-    planeMaterial.color = Vector3(0.8f, 0.8f, 0.0f);
-    
-    Material sphereMaterial = {};
-    sphereMaterial.color = Vector3(0.8f, 0.3f, 0.3f);
-
-    Material sphere2Material = {};
-    sphere2Material.color = Vector3(1.0f, 1.0f, 1.0f) * 0.9f;
-    sphere2Material.reflection = 1.0f;
-
-    Material sphere3Material = {};
-    sphere3Material.color = Vector3(0.8f, 0.6f, 0.2f);
-    sphere3Material.reflection = 0.9f;
-
-    Material sphere4Material = {};
-    sphere4Material.color = Vector3(1.0f, 1.0f, 1.0f) * 0.9f;
-    sphere4Material.refractiveIndex = 1.5f;
-    sphere4Material.reflection = 1.0f;
-
-    Material sphere5Material = {};
-    sphere5Material.color = Vector3(0.8f, 0.8f, 0.8f);
-    sphere5Material.reflection = 0.5f;
-    
-    Material materials[7] = {};
-    materials[0] = defaultMaterial;
-    materials[1] = planeMaterial;
-    materials[2] = sphereMaterial;
-    materials[3] = sphere2Material;
-    materials[4] = sphere3Material;
-    materials[5] = sphere4Material;
-    materials[6] = sphere5Material;
-
-    uint32_t materialCount = sizeof(materials) / sizeof(Material);
-
-    Camera camera = CreateCamera(Vector3(0.0f, 3.0f, 10.0f));
-    
-    World world = {};
-    world.materialCount = materialCount;
-    world.materials = materials;
-    world.planeCount = 1;
-    world.planes = &plane;
-    world.sphereCount = sphereCount;
-    world.sphereSoAArrayCount = sphereSoAArrayCount;
-    world.sphereSoAArray = sphereSoAArray;
-    world.spheres = spheres;
-    world.camera = &camera;
+    World* world = createScene();
 
     uint64_t startClock = GetTimeMilliseconds();
     const uint32_t sampleSize = 512;
 
 #if SINGLE_THREAD
-    uint32_t totalWorkOrderCount = 1;    
+    uint32_t totalWorkOrderCount = 1;
     WorkQueue workQueue = {};
     workQueue.workOrders = (WorkOrder*) malloc(totalWorkOrderCount * sizeof(WorkOrder));
     workQueue.workOrderCount = totalWorkOrderCount;
 
     WorkOrder* workOrder = workQueue.workOrders;
     workOrder->image = &image;
-    workOrder->world = &world;
+    workOrder->world = world;
     workOrder->startRowIndex = 0;
     workOrder->endRowIndex = image.height;
     workOrder->sampleSize = sampleSize;
@@ -514,7 +370,7 @@ int main(int argc, char** argv) {
     for (uint32_t rowIndex = 0; rowIndex < totalWorkOrderCount; ++rowIndex) {
         WorkOrder* workOrder = workQueue.workOrders + rowIndex;
         workOrder->image = &image;
-        workOrder->world = &world;
+        workOrder->world = world;
         workOrder->startRowIndex = counter;
         counter += stride;
         workOrder->endRowIndex = counter;
