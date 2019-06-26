@@ -1,4 +1,4 @@
-compileArguments=(-std=c++11 -Wall -DPLATFORM_MACOS=1 -march=native)
+compileArguments=(-std=c++11 -Wall -march=native)
 
 if [ "$1" == "-d" ]; then
     # Debug build
@@ -10,4 +10,11 @@ else
     compileArguments+=(-O2)
 fi
 
+if [[ "$OSTYPE" == "darwin"* ]]; then 
+    compileArguments+=(-DPLATFORM_MACOS=1)
+elif [[ "$OSTYPE" == "linux-gnu" ]]; then
+    compileArguments+=(-DPLATFORM_LINUX=1)
+fi
+
+mkdir bin
 g++ ${compileArguments[@]} -o bin/raytracer main.cpp -lpthread && bin/raytracer && open render.bmp
