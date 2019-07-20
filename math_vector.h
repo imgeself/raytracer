@@ -1,6 +1,7 @@
 #ifndef _VECTOR_H_
 #define _VECTOR_H_
 
+// TODO: Make flexible vector class using templates someday!
 #include <stdint.h>
 
 struct Vector3 {
@@ -33,8 +34,6 @@ struct Vector3 {
 
     bool operator==(const Vector3 v);
     bool operator!=(const Vector3 v);
-    
-    float Lenght();
 };
 
 inline Vector3::Vector3() {
@@ -151,4 +150,172 @@ inline bool Vector3::operator!=(const Vector3 v) {
     return ((x != v.x) || (y != v.y) || (z != v.z));
 } 
 
+
+// Vector4
+struct Vector4 {
+    float x, y, z, w = 0.0f;
+
+    Vector4();
+    Vector4(float x, float y, float z, float w);
+    Vector4(Vector3 v, float w);
+    Vector4(const Vector4& v);
+
+    Vector3 xyz();
+
+    float operator[](const uint32_t index);
+    Vector4 operator-();
+    Vector4 operator=(const Vector4 v);
+    Vector4 operator+=(const Vector4 v);
+    Vector4 operator*=(const Vector4 v);
+    Vector4 operator-=(const Vector4 v);
+    Vector4 operator/=(const Vector4 v);
+    Vector4 operator-(const Vector4 v);
+    Vector4 operator-(const Vector4 v) const;
+    Vector4 operator*(const Vector4 v);
+    Vector4 operator*(const Vector4 v) const;
+    Vector4 operator/(const Vector4 v);
+    Vector4 operator/(const Vector4 v) const;
+    Vector4 operator+(const Vector4 v);
+    Vector4 operator+(const Vector4 v) const;
+
+    Vector4 operator*(const float factor);
+    Vector4 operator+(const float factor);
+    Vector4 operator-(const float factor);
+    Vector4 operator/(const float factor);
+
+    bool operator==(const Vector4 v);
+    bool operator!=(const Vector4 v);
+};
+
+inline Vector4::Vector4() {
+}
+
+inline Vector4::Vector4(float x, float y, float z, float w) {
+    this->x = x;
+    this->y = y;
+    this->z = z;
+    this->w = w;
+}
+
+inline Vector4::Vector4(Vector3 v, float w) {
+    this->x = v.x;
+    this->y = v.y;
+    this->z = v.z;
+    this->w = w;
+}
+
+inline Vector4::Vector4(const Vector4& v) {
+    this->x = v.x;
+    this->y = v.y;
+    this->z = v.z;
+    this->w = v.w;
+}
+
+inline float Vector4::operator[](const uint32_t index) {
+    return (&x)[index];
+}
+
+inline Vector3 Vector4::xyz() {
+    return Vector3(x, y, z);
+}
+
+inline Vector4 Vector4::operator-() {
+    return Vector4(-x, -y, -z, -w);
+}
+
+inline Vector4 Vector4::operator=(const Vector4 v) {
+    x = v.x;
+    y = v.y;
+    z = v.z;
+    w = v.w;
+    return *this;
+}
+
+inline Vector4 Vector4::operator+=(const Vector4 v) {
+    x += v.x;
+    y += v.y;
+    z += v.z;
+    w += v.w;
+    return *this;
+}
+
+inline Vector4 Vector4::operator*=(const Vector4 v) {
+    x *= v.x;
+    y *= v.y;
+    z *= v.z;
+    w *= v.w;
+    return *this;
+}
+
+inline Vector4 Vector4::operator-=(const Vector4 v) {
+    x -= v.x;
+    y -= v.y;
+    z -= v.z;
+    w -= v.w;
+    return *this;
+}
+
+inline Vector4 Vector4::operator/=(const Vector4 v) {
+    x /= v.x;
+    y /= v.y;
+    z /= v.z;
+    w /= v.w;
+    return *this;
+}
+
+inline Vector4 Vector4::operator*(const Vector4 v) {
+    return Vector4(x * v.x, y * v.y, z * v.z, w * v.w);
+}
+
+inline Vector4 Vector4::operator*(const Vector4 v) const {
+    return Vector4(x * v.x, y * v.y, z * v.z, w * v.w);
+}
+
+inline Vector4 Vector4::operator/(const Vector4 v) {
+    return Vector4(x / v.x, y / v.y, z / v.z, w / v.w);
+}
+
+inline Vector4 Vector4::operator/(const Vector4 v) const {
+    return Vector4(x / v.x, y / v.y, z / v.z, w / v.w);
+}
+
+inline Vector4 Vector4::operator+(const Vector4 v) {
+    return Vector4(x + v.x, y + v.y, z + v.z, w + v.w);
+}
+
+inline Vector4 Vector4::operator+(const Vector4 v) const {
+    return Vector4(x + v.x, y + v.y, z + v.z, w + v.w);
+}
+
+inline Vector4 Vector4::operator-(const Vector4 v) {
+    return Vector4(x - v.x, y - v.y, z - v.z, w - v.w);
+}
+
+inline Vector4 Vector4::operator-(const Vector4 v) const {
+    return Vector4(x - v.x, y - v.y, z - v.z, w - v.w);
+}
+
+inline Vector4 Vector4::operator*(const float factor) {
+    return Vector4(x * factor, y * factor, z * factor, w * factor);
+}
+
+inline Vector4 Vector4::operator+(const float factor) {
+    return Vector4(x + factor, y + factor, z + factor, w + factor);
+}
+
+inline Vector4 Vector4::operator-(const float factor) {
+    return Vector4(x - factor, y - factor, z - factor, w - factor);
+}
+
+inline Vector4 Vector4::operator/(const float factor) {
+    return Vector4(x / factor, y / factor, z / factor, w / factor);
+}
+
+inline bool Vector4::operator==(const Vector4 v) {
+    return ((x == v.x) && (y == v.y) && (z == v.z) && (w == v.w));
+}
+
+inline bool Vector4::operator!=(const Vector4 v) {
+    return ((x != v.x) || (y != v.y) || (z != v.z) || (w != v.w));
+}
 #endif

@@ -22,6 +22,10 @@ inline float DotProduct(const Vector3 v1, const Vector3 v2) {
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
+inline float DotProduct(const Vector4 v1, const Vector4 v2) {
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z + v1.w * v2.w;
+}
+
 inline Vector3 CrossProduct(const Vector3 v1, const Vector3 v2) {
     return Vector3(v1.y * v2.z - v1.z * v2.y,
                    v1.z * v2.x - v1.x * v2.z,
@@ -32,13 +36,27 @@ inline float Lenght(const Vector3 v) {
     return sqrtf(DotProduct(v, v));
 }
 
+inline float Lenght(const Vector4 v) {
+    return sqrtf(DotProduct(v, v));
+}
+
 inline Vector3 Normalize(const Vector3 v) {
     const float dot = DotProduct(v, v);
     const float factor = 1 / sqrtf(dot);
     return Vector3(v.x * factor, v.y * factor, v.z * factor);
 }
 
+inline Vector4 Normalize(const Vector4 v) {
+    const float dot = DotProduct(v, v);
+    const float factor = 1 / sqrtf(dot);
+    return Vector4(v.x * factor, v.y * factor, v.z * factor, v.w * factor);
+}
+
 inline Vector3 Lerp(Vector3 left, float factor, Vector3 right) {
+    return left * (1.0f - factor) + right * factor;
+}
+
+inline Vector4 Lerp(Vector4 left, float factor, Vector4 right) {
     return left * (1.0f - factor) + right * factor;
 }
 
