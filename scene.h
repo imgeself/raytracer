@@ -35,6 +35,15 @@ ALIGN_GPU struct Plane {
     uint32_t materialIndex;
 };
 
+// XY plane axis-aligned rectangle
+// z components of these two vectors should be equal to each other.
+// TODO: Make this vectors Vector2 when you implement 2d vectors. 
+
+struct RectangleXY {
+    Vector3 minPoint;
+    Vector3 maxPoint;
+};
+
 struct Camera {
     Vector3 position;
     Vector3 zVec;
@@ -58,6 +67,8 @@ struct World {
     SphereSoALane* sphereSoAArray;
     uint32_t planeCount;
     Plane* planes;
+    uint32_t rectangleCount;
+    RectangleXY* rectangles;
     Camera* camera;
 };
 
@@ -157,7 +168,7 @@ World* createScene() {
     }
 
     Material defaultMaterial = {};
-    defaultMaterial.emitColor = Vector3(0.1f, 0.2f, 0.4f);
+    //    defaultMaterial.emitColor = Vector3(0.1f, 0.2f, 0.4f);
 
     Material planeMaterial = {};
     planeMaterial.color = Vector3(0.8f, 0.8f, 0.8f);
@@ -179,7 +190,7 @@ World* createScene() {
     sphere4Material.reflection = 1.0f;
 
     Material sphere5Material = {};
-    sphere5Material.emitColor = Vector3(20.0f, 15.0f, 10.0f);
+    sphere5Material.emitColor = Vector3(20.0f, 15.0f, 10.0f) * 0.2f;
 
     Material blueLightMaterial = {};
     blueLightMaterial.emitColor = Vector3(1.0f, 1.0f, 18.0f);
@@ -195,6 +206,10 @@ World* createScene() {
     materials[6] = sphere5Material;
     materials[7] = blueLightMaterial;
 
+    // Initialize rectangles
+    RectangleXY* rect = new RectangleXY;
+    rect->minPoint = Vector3(-2.0f, 0.5f, 2.5f);
+    rect->maxPoint = Vector3(0.0f, 1.5f, 2.5f);
 
     Camera* camera = new Camera(Vector3(0.0f, 4.0f, 10.0f));
 
@@ -210,6 +225,8 @@ World* createScene() {
     world->sphereSoAArrayCount = sphereSoAArrayCount;
     world->sphereSoAArray = sphereSoAArray;
     world->spheres = spheres;
+    world->rectangleCount = 1;
+    world->rectangles = rect;
     world->camera = camera;
 
     return world;
