@@ -115,6 +115,36 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
         }
     }
 
+    // Pz = Oz + Dz * t
+    // Pz is fixed z component of one of the vectors in rectangle struct
+    // t = (Pz - Oz) / Dz
+    for (uint32_t rectangleIndex = 0; rectangleIndex < world->rectangleCount; ++rectangleIndex) {
+        RectangleXY rect = world->rectangles[rectangleIndex];
+
+        float rectZ = rect.minPoint.z;
+
+        float t = (rectZ - ray->origin.z) / ray->direction.z;
+        Vector3 hitVector = ray->origin + ray->direction * t;
+
+        bool hit = hitVector.x <= rect.maxPoint.x && hitVector.x >= rect.minPoint.x &&
+            hitVector.y <= rect.maxPoint.y && hitVector.y >= rect.minPoint.y;
+        if (hit && t < closestHitDistance && t > minHitDistance) {
+            closestHitDistance = t;
+            hitMaterialIndex = 7;
+            Vector3 positiveZ = Vector3(0.0f, 0.0f, 1.0f);
+            // Check for incident ray direction vector direction
+            // If it's coming to back side of rectangle
+            // Flip the normal vector
+            float dot = DotProduct(positiveZ, ray->direction);
+            if (dot > 0) {
+                hitNormal = -positiveZ;
+            } else {
+                hitNormal = positiveZ;
+            }
+            anyHit = true;
+        }
+    }
+
     intersectionResult->t = closestHitDistance;
     intersectionResult->hitMaterialIndex = hitMaterialIndex;
     intersectionResult->hitNormal = hitNormal;
