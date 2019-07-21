@@ -37,11 +37,14 @@ ALIGN_GPU struct Plane {
 
 // XY plane axis-aligned rectangle
 // z components of these two vectors should be equal to each other.
-// TODO: Make this vectors Vector2 when you implement 2d vectors. 
-
+// RULE: Rectangles always define as 2 unit square. Default rectangle's center point always on the origin.
+// Use transform matrices to manupilate position, scale and orientation.
+static const Vector3 rectDefaultMinPoint{ -1.0f, -1.0f, 0.0f };
+static const Vector3 rectDefaultMaxPoint{  1.0f,  1.0f, 0.0f };
 struct RectangleXY {
-    Vector3 minPoint;
-    Vector3 maxPoint;
+    Matrix4 scaleMatrix;
+    Matrix4 translateMatrix;
+    Matrix4 rotationMatrix;
 };
 
 struct Camera {
@@ -208,8 +211,14 @@ World* createScene() {
 
     // Initialize rectangles
     RectangleXY* rect = new RectangleXY;
-    rect->minPoint = Vector3(-2.0f, 0.5f, 2.5f);
-    rect->maxPoint = Vector3(0.0f, 1.5f, 2.5f);
+    Matrix4 scaleMatrixRect = IdentityMatrix;
+    Matrix4 translateMatrixRect = IdentityMatrix;
+
+    ScaleMatrix(scaleMatrixRect, Vector3(1.0f, 0.5f, 0.0f));
+    TranslateMatrix(translateMatrixRect, Vector3(-1.0f, 1.0f, 2.5f));
+    
+    rect->scaleMatrix = scaleMatrixRect;
+    rect->translateMatrix = translateMatrixRect;
 
     Camera* camera = new Camera(Vector3(0.0f, 4.0f, 10.0f));
 
