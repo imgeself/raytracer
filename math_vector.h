@@ -11,7 +11,7 @@ struct Vector3 {
     Vector3(float x, float y, float z);
     Vector3(const Vector3 &v);
     
-    float operator[](const uint32_t index);
+    float& operator[](const uint32_t index);
     Vector3 operator-();
     Vector3 operator=(const Vector3 v);
     Vector3 operator+=(const Vector3 v);
@@ -51,7 +51,7 @@ inline Vector3::Vector3(const Vector3 &v) {
     this->z = v.z;
 }
 
-inline float Vector3::operator[](const uint32_t index) {
+inline float& Vector3::operator[](const uint32_t index) {
     return (&x)[index];
 }
 
@@ -150,6 +150,25 @@ inline bool Vector3::operator!=(const Vector3 v) {
     return ((x != v.x) || (y != v.y) || (z != v.z));
 } 
 
+inline float DotProduct(const Vector3 v1, const Vector3 v2) {
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+}
+
+inline Vector3 CrossProduct(const Vector3 v1, const Vector3 v2) {
+    return Vector3(v1.y * v2.z - v1.z * v2.y,
+        v1.z * v2.x - v1.x * v2.z,
+        v1.x * v2.y - v1.y * v2.x);
+}
+
+inline float Lenght(const Vector3 v) {
+    return sqrtf(DotProduct(v, v));
+}
+
+inline Vector3 Normalize(const Vector3 v) {
+    const float dot = DotProduct(v, v);
+    const float factor = 1 / sqrtf(dot);
+    return Vector3(v.x * factor, v.y * factor, v.z * factor);
+}
 
 // Vector4
 struct Vector4 {
@@ -162,7 +181,7 @@ struct Vector4 {
 
     Vector3 xyz();
 
-    float operator[](const uint32_t index);
+    float& operator[](const uint32_t index);
     Vector4 operator-();
     Vector4 operator=(const Vector4 v);
     Vector4 operator+=(const Vector4 v);
@@ -211,7 +230,7 @@ inline Vector4::Vector4(const Vector4& v) {
     this->w = v.w;
 }
 
-inline float Vector4::operator[](const uint32_t index) {
+inline float& Vector4::operator[](const uint32_t index) {
     return (&x)[index];
 }
 
@@ -318,4 +337,19 @@ inline bool Vector4::operator==(const Vector4 v) {
 inline bool Vector4::operator!=(const Vector4 v) {
     return ((x != v.x) || (y != v.y) || (z != v.z) || (w != v.w));
 }
+
+inline float DotProduct(const Vector4 v1, const Vector4 v2) {
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z + v1.w * v2.w;
+}
+
+inline float Lenght(const Vector4 v) {
+    return sqrtf(DotProduct(v, v));
+}
+
+inline Vector4 Normalize(const Vector4 v) {
+    const float dot = DotProduct(v, v);
+    const float factor = 1 / sqrtf(dot);
+    return Vector4(v.x * factor, v.y * factor, v.z * factor, v.w * factor);
+}
+
 #endif
