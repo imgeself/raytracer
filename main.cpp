@@ -126,8 +126,12 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
         Vector3 maxPoint = (scaleTranslateMatrix * Vector4(rectDefaultMaxPoint, 1.0f)).xyz();
         float rectZ = minPoint.z;
 
-        float t = (rectZ - ray->origin.z) / ray->direction.z;
-        Vector3 hitPoint = ray->origin + ray->direction * t;
+        Matrix4 rayMatrix = rect->translateMatrix * Inverse(rect->rotationMatrix) * Inverse(rect->translateMatrix);
+        Vector3 rayOrigin = (rayMatrix * Vector4(ray->origin, 1.0f)).xyz();
+        Vector3 rayDirection = (rayMatrix * Vector4(ray->direction, 0.0f)).xyz();
+
+        float t = (rectZ - rayOrigin.z) / rayDirection.z;
+        Vector3 hitPoint = rayOrigin + rayDirection * t;
 
         bool hit = hitPoint.x <= maxPoint.x && hitPoint.x >= minPoint.x &&
             hitPoint.y <= maxPoint.y && hitPoint.y >= minPoint.y;
