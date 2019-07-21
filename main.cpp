@@ -119,15 +119,18 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     // Pz is fixed z component of one of the vectors in rectangle struct
     // t = (Pz - Oz) / Dz
     for (uint32_t rectangleIndex = 0; rectangleIndex < world->rectangleCount; ++rectangleIndex) {
-        RectangleXY rect = world->rectangles[rectangleIndex];
+        RectangleXY* rect = world->rectangles + rectangleIndex;
 
-        float rectZ = rect.minPoint.z;
+        Matrix4 scaleTranslateMatrix = rect->translateMatrix * rect->scaleMatrix;
+        Vector3 minPoint = (scaleTranslateMatrix * Vector4(rectDefaultMinPoint, 1.0f)).xyz();
+        Vector3 maxPoint = (scaleTranslateMatrix * Vector4(rectDefaultMaxPoint, 1.0f)).xyz();
+        float rectZ = minPoint.z;
 
         float t = (rectZ - ray->origin.z) / ray->direction.z;
-        Vector3 hitVector = ray->origin + ray->direction * t;
+        Vector3 hitPoint = ray->origin + ray->direction * t;
 
-        bool hit = hitVector.x <= rect.maxPoint.x && hitVector.x >= rect.minPoint.x &&
-            hitVector.y <= rect.maxPoint.y && hitVector.y >= rect.minPoint.y;
+        bool hit = hitPoint.x <= maxPoint.x && hitPoint.x >= minPoint.x &&
+            hitPoint.y <= maxPoint.y && hitPoint.y >= minPoint.y;
         if (hit && t < closestHitDistance && t > minHitDistance) {
             closestHitDistance = t;
             hitMaterialIndex = 7;
