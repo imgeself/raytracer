@@ -170,6 +170,27 @@ inline void TranslateMatrix(Matrix4& mat, Vector3& translateVector) {
     mat[2][3] += translateVector.z;
 }
 
+inline void RotateMatrixXAxis(Matrix4& mat, float radians) {
+    mat[1][1] = cosf(radians);
+    mat[1][2] = -sinf(radians);
+    mat[2][1] = sinf(radians);
+    mat[2][2] = cosf(radians);
+}
+
+inline void RotateMatrixYAxis(Matrix4& mat, float radians) {
+    mat[0][0] = cosf(radians);
+    mat[0][2] = sinf(radians);
+    mat[2][0] = -sinf(radians);
+    mat[2][2] = cosf(radians);
+}
+
+inline void RotateMatrixZAxis(Matrix4& mat, float radians) {
+    mat[0][0] = cosf(radians);
+    mat[0][1] = -sinf(radians);
+    mat[1][0] = sinf(radians);
+    mat[1][1] = cosf(radians);
+}
+
 static const Matrix4 IdentityMatrix(Vector4(1.0f, 0.0f, 0.0f, 0.0f), Vector4(0.0f, 1.0f, 0.0f, 0.0f), Vector4(0.0f, 0.0f, 1.0f, 0.0f), Vector4(0.0f, 0.0f, 0.0f, 1.0f));
 
 #endif
