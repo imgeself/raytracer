@@ -64,6 +64,25 @@ static RectangleXY CreateRectangle(Vector3 position, Vector3 scale, uint32_t mat
     return result;
 }
 
+static const Vector3 XAxis = Vector3(1.0f, 0.0f, 0.0f);
+static const Vector3 YAxis = Vector3(0.0f, 1.0f, 0.0f);
+static const Vector3 ZAxis = Vector3(0.0f, 0.0f, 1.0f);
+
+static void RotateRectangle(RectangleXY* rect, Vector3 axis, float angle) {
+    Matrix4 rotationMatrix = IdentityMatrix;
+    if (axis == XAxis) {
+        RotateMatrixXAxis(rotationMatrix, angle);
+    } else if (axis == YAxis) {
+        RotateMatrixYAxis(rotationMatrix, angle);
+    } else if (axis == ZAxis) {
+        RotateMatrixZAxis(rotationMatrix, angle);
+    } else {
+        throw("Rotation around arbitary axis not supported yet");
+    }
+
+    rect->rotationMatrix = rotationMatrix * rect->rotationMatrix;
+}
+
 struct Box {
     RectangleXY rectangles[6];
 };
@@ -74,22 +93,22 @@ static Box CreateBox(Vector3 position, Vector3 scale, uint32_t materialIndex) {
     Vector3 topRectPosition = position;
     topRectPosition.y += scale.y;
     RectangleXY topRect = CreateRectangle(topRectPosition, Vector3(scale.x, scale.z, 1.0f), materialIndex);
-    RotateMatrixXAxis(topRect.rotationMatrix, -HALF_PI);
+    RotateRectangle(&topRect, XAxis, -HALF_PI);
 
     Vector3 bottomRectPosition = position;
     bottomRectPosition.y -= scale.y;
     RectangleXY bottomRect = CreateRectangle(bottomRectPosition, Vector3(scale.x, scale.z, 1.0f), materialIndex);
-    RotateMatrixXAxis(bottomRect.rotationMatrix, -HALF_PI);
+    RotateRectangle(&bottomRect, XAxis, -HALF_PI);
 
     Vector3 rightRectPosition = position;
     rightRectPosition.x += scale.x;
     RectangleXY rightRect = CreateRectangle(rightRectPosition, Vector3(scale.z, scale.y, 1.0f), materialIndex);
-    RotateMatrixYAxis(rightRect.rotationMatrix, -HALF_PI);
+    RotateRectangle(&rightRect, YAxis, -HALF_PI);
 
     Vector3 leftRectPosition = position;
     leftRectPosition.x -= scale.x;
     RectangleXY leftRect = CreateRectangle(leftRectPosition, Vector3(scale.z, scale.y, 1.0f), materialIndex);
-    RotateMatrixYAxis(leftRect.rotationMatrix, HALF_PI);
+    RotateRectangle(&leftRect, YAxis, HALF_PI);
 
     Vector3 backRectPosition = position;
     backRectPosition.z -= scale.z;
@@ -343,16 +362,16 @@ World* CreateCornellBoxScene() {
 
     // Initialize rectangles
     RectangleXY lightRect = CreateRectangle(Vector3(0.0f, 7.99f, -6.0f), Vector3(2.0f, 2.0f, 1.0f), 4);
-    RotateMatrixXAxis(lightRect.rotationMatrix, -HALF_PI);
+    RotateRectangle(&lightRect, XAxis, -HALF_PI);
 
     RectangleXY bottomRect = CreateRectangle(Vector3(0.0f, -8.0f, -8.0f), Vector3(8.0f, 10.0f, 1.0f), 1);
-    RotateMatrixXAxis(bottomRect.rotationMatrix, -HALF_PI);
+    RotateRectangle(&bottomRect, XAxis, -HALF_PI);
 
     RectangleXY rightRect = CreateRectangle(Vector3(8.0f, 0.0f, -8.0f), Vector3(10.0f, 8.0f, 1.0f), 3);
-    RotateMatrixYAxis(rightRect.rotationMatrix, -HALF_PI);
+    RotateRectangle(&rightRect, YAxis, -HALF_PI);
 
     RectangleXY leftRect = CreateRectangle(Vector3(-8.0f, 0.0f, -8.0f), Vector3(10.0f, 8.0f, 1.0f), 2);
-    RotateMatrixYAxis(leftRect.rotationMatrix, HALF_PI);
+    RotateRectangle(&leftRect, YAxis, HALF_PI);
 
     RectangleXY backRect = CreateRectangle(Vector3(0.0f, 0.0f, -14.0f), Vector3(8.0f, 8.0f, 1.0f), 1);
 
