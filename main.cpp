@@ -376,10 +376,10 @@ THREAD_PROC_RET ThreadProc(void* arguments) {
 int main(int argc, char** argv) {
     Image image = CreateImage(1280, 720);
 
-    World* world = createScene();
+    World* world = CreateCornellBoxScene();
 
     uint64_t startClock = GetTimeMilliseconds();
-    const uint32_t sampleSize = 512;
+    const uint32_t sampleSize = 16;
 
 #if SINGLE_THREAD
     uint32_t totalWorkOrderCount = 1;
