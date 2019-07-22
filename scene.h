@@ -42,7 +42,7 @@ static const Vector3 rectDefaultMinPoint{ -1.0f, -1.0f, 0.0f };
 static const Vector3 rectDefaultMaxPoint{  1.0f,  1.0f, 0.0f };
 struct RectangleXY {
     Matrix4 transformMatrix;
-    // We keep rotation matrix seperate as well because we are using this for rotation rectangle normal.
+    // We keep rotation matrix seperate as well because we are using this for rotating the rectangle normal.
     Matrix4 rotationMatrix;
     uint32_t materialIndex;
 };
@@ -64,6 +64,7 @@ static void RotateRectangle(RectangleXY* rect, Vector3 axis, float angle) {
     }
 
     rect->rotationMatrix = rotationMatrix * rect->rotationMatrix;
+    rect->transformMatrix = rotationMatrix * rect->transformMatrix;
 }
 
 static RectangleXY CreateRectangle(Vector3 position, Vector3 scale, uint32_t materialIndex, 
@@ -97,6 +98,7 @@ static RectangleXY CreateRectangle(Vector3 position, Vector3 scale, uint32_t mat
 
 
 struct Box {
+    Vector3 position;
     RectangleXY rectangles[6];
 };
 
@@ -127,6 +129,7 @@ static Box CreateBox(Vector3 position, Vector3 scale, uint32_t materialIndex) {
     frontRectPosition.z += scale.z;
     RectangleXY frontRect = CreateRectangle(frontRectPosition, Vector3(scale.x, scale.y, 1.0f), materialIndex);
 
+    result.position = position;
     result.rectangles[0] = frontRect;
     result.rectangles[1] = backRect;
     result.rectangles[2] = rightRect;
@@ -137,12 +140,17 @@ static Box CreateBox(Vector3 position, Vector3 scale, uint32_t materialIndex) {
     return result;
 }
 
-static void RotateBoxZAxis(Box* box, float angle) {
-    for (uint32_t rectangleIndex = 0; rectangleIndex < 4; ++rectangleIndex) {
+static void RotateBox(Box* box, Vector3 axis, float angle) {
+    for (uint32_t rectangleIndex = 0; rectangleIndex < 6; ++rectangleIndex) {
         RectangleXY* rect = box->rectangles + rectangleIndex;
-        Matrix4 newRotationMatrix = IdentityMatrix;
-        RotateMatrixZAxis(newRotationMatrix, angle);
-        rect->rotationMatrix = newRotationMatrix * rect->rotationMatrix;
+
+        // To able to rotate all rectangles around box's origin, we need to translate back box's position. 
+        Matrix4 translateMatrix = IdentityMatrix;
+        TranslateMatrix(translateMatrix, box->position);
+
+        rect->transformMatrix = Inverse(translateMatrix) * rect->transformMatrix;
+        RotateRectangle(rect, axis, angle);
+        rect->transformMatrix = translateMatrix * rect->transformMatrix;
     }
 }
 
@@ -363,10 +371,10 @@ World* CreateCornellBoxScene() {
     RectangleXY topRect = CreateRectangle(Vector3(0.0f, 8.0f, -8.0f), Vector3(8.0f, 10.0f, 1.0f), 1, XAxis, -HALF_PI);
 
     Box box = CreateBox(Vector3(2.0f, -6.0f, -3.0f), Vector3(2.0f, 2.0f, 2.0f), 1);
-    //RotateBoxZAxis(&box, -0.3f);
+    RotateBox(&box, Vector3(0.0f, 1.0f, 0.0f), -0.3f);
 
     Box box2 = CreateBox(Vector3(-2.0f, -4.0f, -8.0f), Vector3(2.0f, 4.0f, 2.0f), 1);
-    //RotateBoxZAxis(&box2, 0.2f);
+    RotateBox(&box2, Vector3(0.0f, 1.0f, 0.0f), 0.3f);
 
     uint32_t rectangleCount = 18;
     RectangleXY* rectangles = new RectangleXY[rectangleCount];
