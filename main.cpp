@@ -121,19 +121,15 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     for (uint32_t rectangleIndex = 0; rectangleIndex < world->rectangleCount; ++rectangleIndex) {
         RectangleXY* rect = world->rectangles + rectangleIndex;
 
-        Vector3 minPoint = rectDefaultMinPoint;
-        Vector3 maxPoint = rectDefaultMaxPoint;
-        float rectZ = minPoint.z;
-
         Matrix4 rayMatrix = Inverse(rect->transformMatrix);
         Vector3 rayOrigin = (rayMatrix * Vector4(ray->origin, 1.0f)).xyz();
         Vector3 rayDirection = (rayMatrix * Vector4(ray->direction, 0.0f)).xyz();
 
-        float t = (rectZ - rayOrigin.z) / rayDirection.z;
+        float t = (-rayOrigin.z) / rayDirection.z;
         Vector3 hitPoint = rayOrigin + rayDirection * t;
 
-        bool hit = hitPoint.x <= maxPoint.x && hitPoint.x >= minPoint.x &&
-            hitPoint.y <= maxPoint.y && hitPoint.y >= minPoint.y;
+        bool hit = hitPoint.x <= rectDefaultMaxPoint.x && hitPoint.x >= rectDefaultMinPoint.x &&
+            hitPoint.y <= rectDefaultMaxPoint.y && hitPoint.y >= rectDefaultMinPoint.y;
         if (hit && t < closestHitDistance && t > minHitDistance) {
             closestHitDistance = t;
             hitMaterialIndex = rect->materialIndex;
