@@ -137,8 +137,8 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
             hitPoint.y <= maxPoint.y && hitPoint.y >= minPoint.y;
         if (hit && t < closestHitDistance && t > minHitDistance) {
             closestHitDistance = t;
-            hitMaterialIndex = 7;
-            Vector3 positiveZ = Vector3(0.0f, 0.0f, 1.0f);
+            hitMaterialIndex = rect->materialIndex;
+            Vector3 positiveZ = (rect->rotationMatrix * Vector4(0.0f, 0.0f, 1.0f, 0.0f)).xyz();
             // Check for incident ray direction vector direction
             // If it's coming to back side of rectangle
             // Flip the normal vector
