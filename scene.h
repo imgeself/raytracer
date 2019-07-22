@@ -41,28 +41,11 @@ ALIGN_GPU struct Plane {
 static const Vector3 rectDefaultMinPoint{ -1.0f, -1.0f, 0.0f };
 static const Vector3 rectDefaultMaxPoint{  1.0f,  1.0f, 0.0f };
 struct RectangleXY {
-    Matrix4 scaleMatrix;
-    Matrix4 translateMatrix;
+    Matrix4 transformMatrix;
+    // We keep rotation matrix seperate as well because we are using this for rotation rectangle normal.
     Matrix4 rotationMatrix;
     uint32_t materialIndex;
 };
-
-static RectangleXY CreateRectangle(Vector3 position, Vector3 scale, uint32_t materialIndex) {
-    RectangleXY result = {};
-    Matrix4 scaleMatrixRect = IdentityMatrix;
-    Matrix4 translateMatrixRect = IdentityMatrix;
-    Matrix4 rotateMatrix = IdentityMatrix;
-
-    ScaleMatrix(scaleMatrixRect, scale);
-    TranslateMatrix(translateMatrixRect, position);
-
-    result.scaleMatrix = scaleMatrixRect;
-    result.translateMatrix = translateMatrixRect;
-    result.rotationMatrix = rotateMatrix;
-    result.materialIndex = materialIndex;
-
-    return result;
-}
 
 static const Vector3 XAxis = Vector3(1.0f, 0.0f, 0.0f);
 static const Vector3 YAxis = Vector3(0.0f, 1.0f, 0.0f);
@@ -83,6 +66,36 @@ static void RotateRectangle(RectangleXY* rect, Vector3 axis, float angle) {
     rect->rotationMatrix = rotationMatrix * rect->rotationMatrix;
 }
 
+static RectangleXY CreateRectangle(Vector3 position, Vector3 scale, uint32_t materialIndex, 
+                                   Vector3 initialRotationAxis = Vector3(0.0f, 0.0f, 0.0f), float initialRotationAngle = 0.0f) {
+    RectangleXY result = {};
+    Matrix4 scaleMatrixRect = IdentityMatrix;
+    Matrix4 translateMatrixRect = IdentityMatrix;
+    Matrix4 rotationMatrixRect = IdentityMatrix;
+
+    ScaleMatrix(scaleMatrixRect, scale);
+    TranslateMatrix(translateMatrixRect, position);
+    if (initialRotationAxis == XAxis) {
+        RotateMatrixXAxis(rotationMatrixRect, initialRotationAngle);
+    }
+    else if (initialRotationAxis == YAxis) {
+        RotateMatrixYAxis(rotationMatrixRect, initialRotationAngle);
+    }
+    else if (initialRotationAxis == ZAxis) {
+        RotateMatrixZAxis(rotationMatrixRect, initialRotationAngle);
+    }
+    else {
+        // "Rotation around arbitary axis not supported yet"
+    }
+
+    result.transformMatrix = translateMatrixRect * rotationMatrixRect * scaleMatrixRect;
+    result.rotationMatrix = rotationMatrixRect;
+    result.materialIndex = materialIndex;
+
+    return result;
+}
+
+
 struct Box {
     RectangleXY rectangles[6];
 };
@@ -92,23 +105,19 @@ static Box CreateBox(Vector3 position, Vector3 scale, uint32_t materialIndex) {
 
     Vector3 topRectPosition = position;
     topRectPosition.y += scale.y;
-    RectangleXY topRect = CreateRectangle(topRectPosition, Vector3(scale.x, scale.z, 1.0f), materialIndex);
-    RotateRectangle(&topRect, XAxis, -HALF_PI);
+    RectangleXY topRect = CreateRectangle(topRectPosition, Vector3(scale.x, scale.z, 1.0f), materialIndex, XAxis, -HALF_PI);
 
     Vector3 bottomRectPosition = position;
     bottomRectPosition.y -= scale.y;
-    RectangleXY bottomRect = CreateRectangle(bottomRectPosition, Vector3(scale.x, scale.z, 1.0f), materialIndex);
-    RotateRectangle(&bottomRect, XAxis, -HALF_PI);
+    RectangleXY bottomRect = CreateRectangle(bottomRectPosition, Vector3(scale.x, scale.z, 1.0f), materialIndex, XAxis, -HALF_PI);
 
     Vector3 rightRectPosition = position;
     rightRectPosition.x += scale.x;
-    RectangleXY rightRect = CreateRectangle(rightRectPosition, Vector3(scale.z, scale.y, 1.0f), materialIndex);
-    RotateRectangle(&rightRect, YAxis, -HALF_PI);
+    RectangleXY rightRect = CreateRectangle(rightRectPosition, Vector3(scale.z, scale.y, 1.0f), materialIndex, YAxis, -HALF_PI);
 
     Vector3 leftRectPosition = position;
     leftRectPosition.x -= scale.x;
-    RectangleXY leftRect = CreateRectangle(leftRectPosition, Vector3(scale.z, scale.y, 1.0f), materialIndex);
-    RotateRectangle(&leftRect, YAxis, HALF_PI);
+    RectangleXY leftRect = CreateRectangle(leftRectPosition, Vector3(scale.z, scale.y, 1.0f), materialIndex, YAxis, HALF_PI);
 
     Vector3 backRectPosition = position;
     backRectPosition.z -= scale.z;
@@ -299,20 +308,6 @@ World* createScene() {
     materials[6] = sphere5Material;
     materials[7] = blueLightMaterial;
 
-    // Initialize rectangles
-    RectangleXY* rect = new RectangleXY;
-    Matrix4 scaleMatrixRect = IdentityMatrix;
-    Matrix4 translateMatrixRect = IdentityMatrix;
-    Matrix4 rotateMatrix = IdentityMatrix;
-
-    ScaleMatrix(scaleMatrixRect, Vector3(1.0f, 0.5f, 0.0f));
-    TranslateMatrix(translateMatrixRect, Vector3(-1.0f, 1.0f, 2.5f));
-    RotateMatrixXAxis(rotateMatrix, -3.14f * 0.5f);
-    
-    rect->scaleMatrix = scaleMatrixRect;
-    rect->translateMatrix = translateMatrixRect;
-    rect->rotationMatrix = rotateMatrix;
-
     Camera* camera = new Camera(Vector3(0.0f, 4.0f, 10.0f));
 
     // I used raw pointers for scene objects. Freeing heap memory is callers responsibilty.
@@ -327,8 +322,7 @@ World* createScene() {
     world->sphereSoAArrayCount = sphereSoAArrayCount;
     world->sphereSoAArray = sphereSoAArray;
     world->spheres = spheres;
-    world->rectangleCount = 1;
-    world->rectangles = rect;
+    world->rectangleCount = 0;
     world->camera = camera;
 
     return world;
@@ -361,23 +355,12 @@ World* CreateCornellBoxScene() {
     materials[4] = whiteLightMaterial;
 
     // Initialize rectangles
-    RectangleXY lightRect = CreateRectangle(Vector3(0.0f, 7.99f, -6.0f), Vector3(2.0f, 2.0f, 1.0f), 4);
-    RotateRectangle(&lightRect, XAxis, -HALF_PI);
-
-    RectangleXY bottomRect = CreateRectangle(Vector3(0.0f, -8.0f, -8.0f), Vector3(8.0f, 10.0f, 1.0f), 1);
-    RotateRectangle(&bottomRect, XAxis, -HALF_PI);
-
-    RectangleXY rightRect = CreateRectangle(Vector3(8.0f, 0.0f, -8.0f), Vector3(10.0f, 8.0f, 1.0f), 3);
-    RotateRectangle(&rightRect, YAxis, -HALF_PI);
-
-    RectangleXY leftRect = CreateRectangle(Vector3(-8.0f, 0.0f, -8.0f), Vector3(10.0f, 8.0f, 1.0f), 2);
-    RotateRectangle(&leftRect, YAxis, HALF_PI);
-
+    RectangleXY lightRect = CreateRectangle(Vector3(0.0f, 7.99f, -6.0f), Vector3(2.0f, 2.0f, 1.0f), 4, XAxis, -HALF_PI);
+    RectangleXY bottomRect = CreateRectangle(Vector3(0.0f, -8.0f, -8.0f), Vector3(8.0f, 10.0f, 1.0f), 1, XAxis, -HALF_PI);
+    RectangleXY rightRect = CreateRectangle(Vector3(8.0f, 0.0f, -8.0f), Vector3(10.0f, 8.0f, 1.0f), 3, YAxis, -HALF_PI);
+    RectangleXY leftRect = CreateRectangle(Vector3(-8.0f, 0.0f, -8.0f), Vector3(10.0f, 8.0f, 1.0f), 2, YAxis, HALF_PI);
     RectangleXY backRect = CreateRectangle(Vector3(0.0f, 0.0f, -14.0f), Vector3(8.0f, 8.0f, 1.0f), 1);
-
-    RectangleXY topRect = CreateRectangle(Vector3(0.0f, 8.0f, -8.0f), Vector3(8.0f, 10.0f, 1.0f), 1);
-    RotateMatrixXAxis(topRect.rotationMatrix, -HALF_PI);
-
+    RectangleXY topRect = CreateRectangle(Vector3(0.0f, 8.0f, -8.0f), Vector3(8.0f, 10.0f, 1.0f), 1, XAxis, -HALF_PI);
 
     Box box = CreateBox(Vector3(2.0f, -6.0f, -3.0f), Vector3(2.0f, 2.0f, 2.0f), 1);
     //RotateBoxZAxis(&box, -0.3f);
