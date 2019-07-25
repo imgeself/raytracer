@@ -144,7 +144,7 @@ static void RotateBox(Box* box, Vector3 axis, float angle) {
     for (uint32_t rectangleIndex = 0; rectangleIndex < 6; ++rectangleIndex) {
         RectangleXY* rect = box->rectangles + rectangleIndex;
 
-        // To able to rotate all rectangles around box's origin, we need to translate back box's position. 
+        // To able to rotate all rectangles around box's origin, we need to translate back to box's position. 
         Matrix4 translateMatrix = IdentityMatrix;
         TranslateMatrix(translateMatrix, box->position);
 
@@ -396,6 +396,11 @@ World* CreateCornellBoxScene() {
     rectangles[15] = box2.rectangles[3];
     rectangles[16] = box2.rectangles[4];
     rectangles[17] = box2.rectangles[5];
+
+    for (uint32_t rectangleIndex = 0; rectangleIndex < rectangleCount; ++rectangleIndex) {
+        RectangleXY* rect = rectangles + rectangleIndex;
+        rect->transformMatrix = Inverse(rect->transformMatrix);
+    }
 
 
     Camera* camera = new Camera(Vector3(0.0f, 1.0f, 20.0f));

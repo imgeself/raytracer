@@ -121,7 +121,8 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     for (uint32_t rectangleIndex = 0; rectangleIndex < world->rectangleCount; ++rectangleIndex) {
         RectangleXY* rect = world->rectangles + rectangleIndex;
 
-        Matrix4 rayMatrix = Inverse(rect->transformMatrix);
+        // rectangle's transform matrix is already inverted when creating scene
+        Matrix4 rayMatrix = rect->transformMatrix;
         Vector3 rayOrigin = (rayMatrix * Vector4(ray->origin, 1.0f)).xyz();
         Vector3 rayDirection = (rayMatrix * Vector4(ray->direction, 0.0f)).xyz();
 
@@ -374,7 +375,7 @@ int main(int argc, char** argv) {
     World* world = CreateCornellBoxScene();
 
     uint64_t startClock = GetTimeMilliseconds();
-    const uint32_t sampleSize = 16;
+    const uint32_t sampleSize = 512;
 
 #if SINGLE_THREAD
     uint32_t totalWorkOrderCount = 1;
