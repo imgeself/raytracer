@@ -50,8 +50,8 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     }
 
     // Broadcast scalar values into lanes.
-    LaneVector3 rayOrigin(ray->origin);
-    LaneVector3 rayDirection(ray->direction);
+    LaneVector3 rayOriginLane(ray->origin);
+    LaneVector3 rayDirectionLane(ray->direction);
 
     LaneF32 closestHitDistanceLane = LaneF32(closestHitDistance);
     LaneF32 hitMaterialIndexLane = LaneF32(hitMaterialIndex);
@@ -60,9 +60,9 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     for (int sphereLaneIndex = 0; sphereLaneIndex < world->sphereSoAArrayCount; ++sphereLaneIndex) {	
         SphereSoALane sphereSoA = world->sphereSoAArray[sphereLaneIndex];
     
-        LaneVector3 centerToOrigin = rayOrigin - sphereSoA.position;
-        LaneF32 a = DotProduct(rayDirection, rayDirection);
-        LaneF32 b = 2.0f * DotProduct(rayDirection, centerToOrigin);
+        LaneVector3 centerToOrigin = rayOriginLane - sphereSoA.position;
+        LaneF32 a = DotProduct(rayDirectionLane, rayDirectionLane);
+        LaneF32 b = 2.0f * DotProduct(rayDirectionLane, centerToOrigin);
         LaneF32 c = DotProduct(centerToOrigin, centerToOrigin) - (sphereSoA.radiusSquared);
         LaneF32 discriminant = FMulSub(b, b, 4.0f * a * c); //b * b - 4.0f * a * c;
         LaneF32 denom = 2.0f * a;
@@ -83,15 +83,52 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
                 Select(&closestHitDistanceLane, hitMask, hitDistance);
                 Select(&hitMaterialIndexLane, hitMask, sphereSoA.materialIndex);
             
-                LaneVector3 hitPosition = FMulAdd(rayDirection, hitDistance, rayOrigin);
+                LaneVector3 hitPosition = FMulAdd(rayDirectionLane, hitDistance, rayOriginLane);
                 Select(&hitNormalLane, hitMask, Normalize(hitPosition - sphereSoA.position));
                 anyHit = true;
             }
         }
     }
 
+    // Pz = Oz + Dz * t
+    // Pz is fixed z component of one of the vectors in rectangle struct
+    // t = (Pz - Oz) / Dz
+    for (uint32_t rectangleLaneIndex = 0; rectangleLaneIndex < world->rectangleLaneArrayCount; ++rectangleLaneIndex) {
+        RectangleLane* rectangleLane = world->rectangleLaneArray + rectangleLaneIndex;
+
+        // rectangle's transform matrix is already inverted when creating scene
+        LaneMatrix4 rayMatrix = rectangleLane->transformMatrix;
+        LaneVector3 localRayOrigin = (rayMatrix * LaneVector4(rayOriginLane, 1.0f)).xyz();
+        LaneVector3 localRayDirection = (rayMatrix * LaneVector4(rayDirectionLane, 0.0f)).xyz();
+
+        LaneF32 t = (-localRayOrigin.z) / localRayDirection.z;
+        LaneVector3 hitPoint = localRayOrigin + localRayDirection * t;
+
+        LaneF32 hit = hitPoint.x <= rectDefaultMaxPoint.x & 
+                      hitPoint.x >= rectDefaultMinPoint.x &
+                      hitPoint.y <= rectDefaultMaxPoint.y & 
+                      hitPoint.y >= rectDefaultMinPoint.y;
+
+        LaneF32 hitMask = hit & (t < closestHitDistanceLane) & (t > minHitDistance);
+        if (!MaskIsZeroed(hitMask)) {
+            Select(&closestHitDistanceLane, hitMask, t);
+            Select(&hitMaterialIndexLane, hitMask, rectangleLane->materialIndex);
+            
+            LaneVector3 rectNormal = rectangleLane->normal;
+            // Check for incident ray direction vector direction
+            // If it's coming to back side of rectangle
+            // Flip the normal vector
+            LaneF32 dot = DotProduct(rectNormal, rayDirectionLane);
+            LaneVector3 flippedRectNormal = -rectNormal;
+            LaneF32 flipMask = dot > 0.0f;
+            Select(&rectNormal, flipMask, flippedRectNormal);
+            Select(&hitNormalLane, hitMask, rectNormal);
+            anyHit = true;
+        }
+    }
+
     if (anyHit) {
-        // After calculating n sphere ray intersection, we have to find which one is closer.
+        // After calculating n primitive and ray intersection, we have to find which one is closer.
         // This is probably the most naive way to do it. We store lane values into an array and iterating through to find any close hit. 
         ALIGN_LANE float closestHitDistanceLaneUnpacked[LANE_WIDTH];
         ALIGN_LANE float hitMaterialIndexLaneUnpacked[LANE_WIDTH];
@@ -112,39 +149,6 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
                                     hitNormalLaneYUnpacked[i],
                                     hitNormalLaneZUnpacked[i]);
             }
-        }
-    }
-
-    // Pz = Oz + Dz * t
-    // Pz is fixed z component of one of the vectors in rectangle struct
-    // t = (Pz - Oz) / Dz
-    for (uint32_t rectangleIndex = 0; rectangleIndex < world->rectangleCount; ++rectangleIndex) {
-        RectangleXY* rect = world->rectangles + rectangleIndex;
-
-        // rectangle's transform matrix is already inverted when creating scene
-        Matrix4 rayMatrix = rect->transformMatrix;
-        Vector3 rayOrigin = (rayMatrix * Vector4(ray->origin, 1.0f)).xyz();
-        Vector3 rayDirection = (rayMatrix * Vector4(ray->direction, 0.0f)).xyz();
-
-        float t = (-rayOrigin.z) / rayDirection.z;
-        Vector3 hitPoint = rayOrigin + rayDirection * t;
-
-        bool hit = hitPoint.x <= rectDefaultMaxPoint.x && hitPoint.x >= rectDefaultMinPoint.x &&
-            hitPoint.y <= rectDefaultMaxPoint.y && hitPoint.y >= rectDefaultMinPoint.y;
-        if (hit && t < closestHitDistance && t > minHitDistance) {
-            closestHitDistance = t;
-            hitMaterialIndex = rect->materialIndex;
-            Vector3 rectNormal = rect->normal;
-            // Check for incident ray direction vector direction
-            // If it's coming to back side of rectangle
-            // Flip the normal vector
-            float dot = DotProduct(rectNormal, ray->direction);
-            if (dot > 0) {
-                hitNormal = -rectNormal;
-            } else {
-                hitNormal = rectNormal;
-            }
-            anyHit = true;
         }
     }
 
@@ -197,6 +201,38 @@ IntersectWorld(World* world, Ray* ray, WorldIntersectionResult* intersectionResu
 
                 Vector3 hitPosition = ray->origin + ray->direction * hitDistance;
                 intersectionResult->hitNormal = Normalize(hitPosition - sphere.position);
+            }
+        }
+    }
+
+    // Pz = Oz + Dz * t
+    // Pz is fixed z component of one of the vectors in rectangle struct
+    // t = (Pz - Oz) / Dz
+    for (uint32_t rectangleIndex = 0; rectangleIndex < world->rectangleCount; ++rectangleIndex) {
+        RectangleXY* rect = world->rectangles + rectangleIndex;
+
+        // rectangle's transform matrix is already inverted when creating scene
+        Matrix4 rayMatrix = rect->transformMatrix;
+        Vector3 rayOrigin = (rayMatrix * Vector4(ray->origin, 1.0f)).xyz();
+        Vector3 rayDirection = (rayMatrix * Vector4(ray->direction, 0.0f)).xyz();
+
+        float t = (-rayOrigin.z) / rayDirection.z;
+        Vector3 hitPoint = rayOrigin + rayDirection * t;
+
+        bool hit = hitPoint.x <= rectDefaultMaxPoint.x && hitPoint.x >= rectDefaultMinPoint.x &&
+            hitPoint.y <= rectDefaultMaxPoint.y && hitPoint.y >= rectDefaultMinPoint.y;
+        if (hit && t < intersectionResult->t && t > minHitDistance) {
+            intersectionResult->t = t;
+            intersectionResult->hitMaterialIndex = rect->materialIndex;
+            Vector3 rectNormal = rect->normal;
+            // Check for incident ray direction vector direction
+            // If it's coming to back side of rectangle
+            // Flip the normal vector
+            float dot = DotProduct(rectNormal, ray->direction);
+            if (dot > 0) {
+                intersectionResult->hitNormal = -rectNormal;
+            } else {
+                intersectionResult->hitNormal = rectNormal;
             }
         }
     }
