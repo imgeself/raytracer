@@ -46,6 +46,12 @@ struct RectangleXY {
     uint32_t materialIndex;
 };
 
+struct RectangleLane {
+    LaneMatrix4 transformMatrix;
+    LaneVector3 normal{ 0.0f, 0.0, 1.0f };
+    LaneF32 materialIndex;
+};
+
 static const Vector3 XAxis = Vector3(1.0f, 0.0f, 0.0f);
 static const Vector3 YAxis = Vector3(0.0f, 1.0f, 0.0f);
 static const Vector3 ZAxis = Vector3(0.0f, 0.0f, 1.0f);
@@ -179,6 +185,8 @@ struct World {
     Plane* planes;
     uint32_t rectangleCount;
     RectangleXY* rectangles;
+    uint32_t rectangleLaneArrayCount;
+    RectangleLane* rectangleLaneArray;
     Camera* camera;
 };
 
@@ -402,6 +410,43 @@ World* CreateCornellBoxScene() {
         rect->transformMatrix = Inverse(rect->transformMatrix);
     }
 
+    // We use AoSoA layout for rectangle data. fixed simd-lane size arrays of each member.
+    const uint32_t rectangleLaneArrayCount = (rectangleCount + LANE_WIDTH - 1) / LANE_WIDTH;
+    RectangleLane* rectangleLaneArray = new RectangleLane[rectangleLaneArrayCount];
+
+    for (int i = 0; i < rectangleLaneArrayCount; ++i) {
+        ALIGN_LANE float rectanglesTransformMatrixArray[4][4][LANE_WIDTH];
+        ALIGN_LANE float rectanglesNormal[3][LANE_WIDTH];
+        ALIGN_LANE float rectanglesMaterialIndex[LANE_WIDTH];
+
+        // Put scalar rectangle values into the arrays
+        uint32_t remainingRectangles = rectangleCount - i * LANE_WIDTH;
+        uint32_t len = (remainingRectangles / LANE_WIDTH) > 0 ? LANE_WIDTH : remainingRectangles % LANE_WIDTH;
+        for (int j = 0; j < len; ++j) {
+            uint32_t rectangleIndex = j + i * LANE_WIDTH;
+            RectangleXY* rect = rectangles + rectangleIndex;
+
+            for (uint32_t rowIndex = 0; rowIndex < 4; ++rowIndex) {
+                for (uint32_t columnIndex = 0; columnIndex < 4; ++columnIndex) {
+                    rectanglesTransformMatrixArray[rowIndex][columnIndex][j] = rect->transformMatrix[rowIndex][columnIndex];
+                }
+            }
+
+            rectanglesNormal[0][j] = rect->normal.x;
+            rectanglesNormal[1][j] = rect->normal.y;
+            rectanglesNormal[2][j] = rect->normal.z;
+            rectanglesMaterialIndex[j] = rect->materialIndex;
+        }
+
+        // Put those arrays into SIMD registers.
+        RectangleLane rectangleLane = {};
+        rectangleLane.transformMatrix = LaneMatrix4(rectanglesTransformMatrixArray);
+        rectangleLane.normal = LaneVector3(rectanglesNormal);
+        rectangleLane.materialIndex = LaneF32(rectanglesMaterialIndex);
+
+        rectangleLaneArray[i] = rectangleLane;
+    }
+
 
     Camera* camera = new Camera(Vector3(0.0f, 1.0f, 20.0f));
 
@@ -416,6 +461,8 @@ World* CreateCornellBoxScene() {
     world->sphereSoAArrayCount = 0;
     world->rectangleCount = rectangleCount;
     world->rectangles = rectangles;
+    world->rectangleLaneArrayCount = rectangleLaneArrayCount;
+    world->rectangleLaneArray = rectangleLaneArray;
     world->camera = camera;
 
     return world;
