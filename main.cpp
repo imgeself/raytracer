@@ -134,15 +134,15 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
         if (hit && t < closestHitDistance && t > minHitDistance) {
             closestHitDistance = t;
             hitMaterialIndex = rect->materialIndex;
-            Vector3 positiveZ = (rect->rotationMatrix * Vector4(0.0f, 0.0f, 1.0f, 0.0f)).xyz();
+            Vector3 rectNormal = rect->normal;
             // Check for incident ray direction vector direction
             // If it's coming to back side of rectangle
             // Flip the normal vector
-            float dot = DotProduct(positiveZ, ray->direction);
+            float dot = DotProduct(rectNormal, ray->direction);
             if (dot > 0) {
-                hitNormal = -positiveZ;
+                hitNormal = -rectNormal;
             } else {
-                hitNormal = positiveZ;
+                hitNormal = rectNormal;
             }
             anyHit = true;
         }

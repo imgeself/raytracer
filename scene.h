@@ -42,8 +42,7 @@ static const Vector3 rectDefaultMinPoint{ -1.0f, -1.0f, 0.0f };
 static const Vector3 rectDefaultMaxPoint{  1.0f,  1.0f, 0.0f };
 struct RectangleXY {
     Matrix4 transformMatrix;
-    // We keep rotation matrix seperate as well because we are using this for rotating the rectangle normal.
-    Matrix4 rotationMatrix;
+    Vector3 normal{ 0.0f, 0.0, 1.0f };
     uint32_t materialIndex;
 };
 
@@ -63,7 +62,8 @@ static void RotateRectangle(RectangleXY* rect, Vector3 axis, float angle) {
         throw("Rotation around arbitary axis not supported yet");
     }
 
-    rect->rotationMatrix = rotationMatrix * rect->rotationMatrix;
+    Vector3 rotatedNormal = (rotationMatrix * Vector4(rect->normal, 0.0f)).xyz();
+    rect->normal = rotatedNormal;
     rect->transformMatrix = rotationMatrix * rect->transformMatrix;
 }
 
@@ -90,7 +90,7 @@ static RectangleXY CreateRectangle(Vector3 position, Vector3 scale, uint32_t mat
     }
 
     result.transformMatrix = translateMatrixRect * rotationMatrixRect * scaleMatrixRect;
-    result.rotationMatrix = rotationMatrixRect;
+    result.normal = (rotationMatrixRect * Vector4(result.normal, 0.0f)).xyz();
     result.materialIndex = materialIndex;
 
     return result;
