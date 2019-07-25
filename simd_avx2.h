@@ -68,6 +68,20 @@ inline LaneF32 operator<(const LaneF32 left, const LaneF32 right) {
     return result;
 };
 
+inline LaneF32 operator<=(const LaneF32 left, const LaneF32 right) {
+    LaneF32 result;
+    result.m = _mm256_cmp_ps(left.m, right.m, _CMP_LE_OQ);
+
+    return result;
+}
+
+inline LaneF32 operator>=(const LaneF32 left, const LaneF32 right) {
+    LaneF32 result;
+    result.m = _mm256_cmp_ps(left.m, right.m, _CMP_GE_OQ);
+
+    return result;
+}
+
 inline LaneF32 operator|(const LaneF32 left, const LaneF32 right) {
     LaneF32 result;
     result.m = _mm256_or_ps(left.m, right.m);
