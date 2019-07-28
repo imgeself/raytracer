@@ -11,8 +11,9 @@ I'm using these resources as a guide for developing the raytracer:
  - [Scratchapixel](https://www.scratchapixel.com/index.php)
 
 ## Some features
- - Intersection with planes and spheres
+ - Intersection with planes, spheres and rectangles
  - Support for reflective, diffuse, emissive and dielectric materials
+ - Cornell box
  - Multithreading
  - SIMD sphere intersection checking
  - Sampling
@@ -20,13 +21,14 @@ I'm using these resources as a guide for developing the raytracer:
  - GPU port (OpenGL/Compute Shaders)
  - No 3rd lib (I think it's a very good feature)
  
-Here is an example image that generated with the raytracer:
+Here are some example images that generated with the raytracer:
 
-![Render exapmle](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/emit-8000spp.png)
+![Render exapmle](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/90-rotate.png)
+
+![Render exapmle2](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/correct-cornell.png)
 
 ## Roadmap
 These are the things I will try to implement
- - Cornell box
  - Bounding Volume Hierarchies
  - 3D Model rendering
  - Texture mapping
