@@ -15,7 +15,7 @@ I'm using these resources as a guide for developing the raytracer:
  - Support for reflective, diffuse, emissive and dielectric materials
  - Cornell box
  - Multithreading
- - SIMD sphere intersection checking
+ - SIMD sphere and rectangle intersection checking
  - Sampling
  - Antialiasing with sampling
  - GPU port (OpenGL/Compute Shaders)
@@ -25,7 +25,7 @@ Here are some example images that generated with the raytracer:
 
 ![Render exapmle](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/90-rotate.png)
 
-![Render exapmle2](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/correct-cornell.png)
+![Render exapmle2](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/cornell-8000.png)
 
 ## Roadmap
 These are the things I will try to implement
