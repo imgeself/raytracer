@@ -96,7 +96,8 @@ bool IntersectWorldWide(World* world, Ray* ray, WorldIntersectionResult* interse
     for (uint32_t rectangleLaneIndex = 0; rectangleLaneIndex < world->rectangleLaneArrayCount; ++rectangleLaneIndex) {
         RectangleLane* rectangleLane = world->rectangleLaneArray + rectangleLaneIndex;
 
-        // rectangle's transform matrix is already inverted when creating scene
+        // rectangle's transform matrix is inverted on scene initialization
+        // We don't invert it here
         LaneMatrix4 rayMatrix = rectangleLane->transformMatrix;
         LaneVector3 localRayOrigin = (rayMatrix * LaneVector4(rayOriginLane, 1.0f)).xyz();
         LaneVector3 localRayDirection = (rayMatrix * LaneVector4(rayDirectionLane, 0.0f)).xyz();
