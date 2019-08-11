@@ -40,7 +40,7 @@ ALIGN_GPU struct Plane {
 // Use transform matrices to manupilate position, scale and orientation.
 static const Vector3 rectDefaultMinPoint{ -1.0f, -1.0f, 0.0f };
 static const Vector3 rectDefaultMaxPoint{  1.0f,  1.0f, 0.0f };
-struct RectangleXY {
+ALIGN_GPU struct RectangleXY {
     Matrix4 transformMatrix;
     Vector3 normal{ 0.0f, 0.0, 1.0f };
     uint32_t materialIndex;
@@ -177,12 +177,12 @@ struct Camera {
 struct World {
     uint32_t materialCount;
     Material* materials;
+    uint32_t planeCount;
+    Plane* planes;
     uint32_t sphereCount;
     Sphere* spheres;
     uint32_t sphereSoAArrayCount;
     SphereSoALane* sphereSoAArray;
-    uint32_t planeCount;
-    Plane* planes;
     uint32_t rectangleCount;
     RectangleXY* rectangles;
     uint32_t rectangleLaneArrayCount;
