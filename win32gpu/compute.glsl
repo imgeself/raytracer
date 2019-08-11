@@ -349,8 +349,8 @@ void main() {
     float halfFilmWidth = filmWidth * 0.5f;
     float halfFilmHeight = filmHeight * 0.5f;
 
-    float halfPixelWidth = 0.5f / width;
-    float halfPixelHeight = 0.5f / height;
+    float pixelWidth = 1.0f / width;
+    float pixelHeight = 1.0f / height;
 
     uint32_t sampleSize = 8;
     uint32_t randomState = time * (x + y * 36) + 1;
@@ -360,8 +360,8 @@ void main() {
     float filmX = (float(x) / float(width) * 2.0f - 1.0f);
     float filmY = (float(y) / float(height) * 2.0f - 1.0f);
     for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
-        float offsetX = filmX + RandomBilateral(randomState) * halfPixelWidth;
-        float offsetY = filmY + RandomBilateral(randomState) * halfPixelHeight;
+        float offsetX = filmX + RandomBilateral(randomState) * pixelWidth;
+        float offsetY = filmY + RandomBilateral(randomState) * pixelHeight;
         
         Vector3 filmPosition = filmCenter + camera.xVec * offsetX * halfFilmWidth + camera.yVec * halfFilmHeight * offsetY;
         

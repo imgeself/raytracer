@@ -364,8 +364,8 @@ bool RaytraceWork(WorkQueue* workQueue) {
     float halfFilmWidth = filmWidth * 0.5f;
     float halfFilmHeight = filmHeight * 0.5f;
 
-    float halfPixelWidth = 0.5f / image->width;
-    float halfPixelHeight = 0.5f / image->height;
+    float pixelWidth = 0.5f / image->width;
+    float pixelHeight = 0.5f / image->height;
 
     uint32_t randomState = 262346 * (startRowIndex + endRowIndex * 36);
     uint64_t totalBounces = 0;
@@ -378,8 +378,8 @@ bool RaytraceWork(WorkQueue* workQueue) {
         
             Vector3 color(0.0f, 0.0f, 0.0f);
             for (uint32_t sampleIndex = 0; sampleIndex < sampleSize; ++sampleIndex) {
-                float offsetX = filmX + RandomBilateral(&randomState) * halfPixelWidth;
-                float offsetY = filmY + RandomBilateral(&randomState) * halfPixelHeight;
+                float offsetX = filmX + RandomBilateral(&randomState) * pixelWidth;
+                float offsetY = filmY + RandomBilateral(&randomState) * pixelHeight;
         
                 Vector3 filmPosition = filmCenter + cameraX * offsetX * halfFilmWidth + cameraY * halfFilmHeight * offsetY;
         
