@@ -3,7 +3,9 @@
 #extension GL_ARB_compute_shader : enable
 #extension GL_ARB_shader_storage_buffer_object : enable
 
+#define Matrix4 mat4
 #define Vector3 vec3
+#define Vector4 vec4
 #define uint32_t uint
 
 // Function defines
@@ -14,6 +16,7 @@
 #define Lerp(A, c, B) mix(A, B, c)
 
 #define F32Max 3.402823466e+38F
+#define PI 3.141592653
 
 layout(rgba32f, location = 0) readonly uniform image2D srcImage;
 layout(rgba32f, location = 1) writeonly uniform image2D destImage;
@@ -47,6 +50,14 @@ struct Camera {
     Vector3 xVec;
 };
 
+const Vector3 rectDefaultMinPoint = Vector3(-1.0f, -1.0f, 0.0f);
+const Vector3 rectDefaultMaxPoint = Vector3(1.0f,  1.0f, 0.0f);
+struct RectangleXY {
+    Matrix4 transformMatrix;
+    Vector3 normal;
+    uint32_t materialIndex;
+};
+
 // There can only be one array of variable size per SSBO and it has to be the bottommost in the layout definition.
 // So I created 1 SSBO for every scene element buffer.
 // TODO: This is dumb! Because scene never change on runtime, all of those buffers actually fixed size.
@@ -63,7 +74,11 @@ layout(binding = 2) buffer PlaneBuffer {
     Plane gPlanes[];
 };
 
-layout(binding = 3) buffer Counter { 
+layout(binding = 3) buffer RectangleBuffer {
+    RectangleXY gRectangles[];
+};
+
+layout(binding = 4) buffer Counter { 
     uint32_t gBounceCount; 
 };
 
@@ -199,7 +214,37 @@ bool IntersectWorld(in Ray ray, inout WorldIntersectionResult intersectionResult
             }
         }
     }
-    
+
+    for (int rectangleIndex = 0; rectangleIndex < gRectangles.length(); ++rectangleIndex) {
+        RectangleXY rect = gRectangles[rectangleIndex];
+
+        // rectangle's transform matrix is already inverted when creating scene
+        Matrix4 rayMatrix = transpose(rect.transformMatrix);
+        Vector3 rayOrigin = (rayMatrix * Vector4(ray.origin, 1.0f)).xyz;
+        Vector3 rayDirection = (rayMatrix * Vector4(ray.direction, 0.0f)).xyz;
+
+        float t = (-rayOrigin.z) / rayDirection.z;
+        Vector3 hitPoint = rayOrigin + rayDirection * t;
+
+        bool hit = hitPoint.x <= rectDefaultMaxPoint.x && hitPoint.x >= rectDefaultMinPoint.x &&
+            hitPoint.y <= rectDefaultMaxPoint.y && hitPoint.y >= rectDefaultMinPoint.y;
+        if (hit && t < intersectionResult.t && t > minHitDistance) {
+            intersectionResult.t = t;
+            intersectionResult.hitMaterialIndex = rect.materialIndex;
+            Vector3 rectNormal = rect.normal;
+            // Check for incident ray direction vector direction
+            // If it's coming to back side of rectangle
+            // Flip the normal vector
+            float dot = DotProduct(rectNormal, ray.direction);
+            if (dot > 0) {
+                intersectionResult.hitNormal = -rectNormal;
+            }
+            else {
+                intersectionResult.hitNormal = rectNormal;
+            }
+        }
+    }
+
     return intersectionResult.t < F32Max;
 }
 
