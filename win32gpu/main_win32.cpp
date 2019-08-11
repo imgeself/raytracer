@@ -144,7 +144,7 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 
     ShowWindow(windowHandle, nCmdShow);
 
-    World* world = createScene();
+    World* world = CreateCornellBoxScene();
     Vector3 cameraPosition = world->camera->position;
 
     glEnable(GL_DEBUG_OUTPUT);
@@ -219,22 +219,40 @@ int WINAPI wWinMain(HINSTANCE hInstance,
     glBindTexture(GL_TEXTURE_2D, 0);
     
     // Compute shader initialization
-    uint32_t ssbObjects[4];
+    uint32_t ssbObjects[5];
     glGenBuffers(ARRAYSIZE(ssbObjects), ssbObjects);
+    // Array for bindable objects. We shouldn't bind objects that have no memory.
+    bool ssboBind[5] = { true, true, true, true, true };
 
     uint32_t materialsSSBO = ssbObjects[0];
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialsSSBO);
     glBufferStorage(GL_SHADER_STORAGE_BUFFER, sizeof(Material) * world->materialCount, world->materials, 0);
+    if (world->materialCount <= 0) {
+        ssboBind[0] = false;
+    }
 
     uint32_t spheresSSBO = ssbObjects[1];
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, spheresSSBO);
     glBufferStorage(GL_SHADER_STORAGE_BUFFER, sizeof(Sphere) * world->sphereCount, world->spheres, 0);
+    if (world->sphereCount <= 0) {
+        ssboBind[1] = false;
+    }
 
     uint32_t planesSSBO = ssbObjects[2];
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, planesSSBO);
     glBufferStorage(GL_SHADER_STORAGE_BUFFER, sizeof(Plane) * world->planeCount, world->planes, 0);
+    if (world->planeCount <= 0) {
+        ssboBind[2] = false;
+    }
 
-    uint32_t bounceCountSSBO = ssbObjects[3];   
+    uint32_t rectanglesSSBO = ssbObjects[3];
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, rectanglesSSBO);
+    glBufferStorage(GL_SHADER_STORAGE_BUFFER, sizeof(RectangleXY) * world->rectangleCount, world->rectangles, 0);
+    if (world->rectangleCount <= 0) {
+        ssboBind[3] = false;
+    }
+
+    uint32_t bounceCountSSBO = ssbObjects[4];   
 
     glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     int frameIndex = 0;
@@ -252,13 +270,15 @@ int WINAPI wWinMain(HINSTANCE hInstance,
             glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
             // Reset bounce count buffer to 0 on beginnig of the frame.
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, bounceCountSSBO);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, bounceCountSSBO);
             glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(uint32_t), NULL, GL_DYNAMIC_DRAW);
             uint32_t bounceCount = 0;
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &bounceCount);
 
             for (uint32_t ssboIndex = 0; ssboIndex < ARRAYSIZE(ssbObjects); ++ssboIndex) {
-                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, ssboIndex, ssbObjects[ssboIndex]);
+                if (ssboBind[ssboIndex]) {
+                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, ssboIndex, ssbObjects[ssboIndex]);
+                }
             }
 
             glUseProgram(computeProgram);
@@ -310,8 +330,8 @@ int WINAPI wWinMain(HINSTANCE hInstance,
     }
 
     // Yeah, I should destroy all the opengl objects that created, free scene memory,
-    // destroy window and gl constext, etc
-    // But after application terminated, all memory we allocated will be freed, and all objects will be destroyed.
+    // destroy window and gl context, etc
+    // But after application terminated, all the allocated memory will be freed, and all objects will be destroyed.
     // Everything will be cleaned up by the OS.
     // Should I do that cleanup in code?
 
