@@ -23,9 +23,9 @@ I'm using these resources as a guide for developing this raytracer:
  
 Here are some example images that generated with this raytracer:
 
-![Render exapmle](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/90-rotate.png)
+![Render example](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/img/90-rotate.png)
 
-![Render exapmle2](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/assets/img/cornell-8000.png)
+![Render example2](https://raw.githubusercontent.com/imgeself/imgeself.github.io/master/img/cornell-8000.png)
 
 ## Roadmap
 These are the things I will try to implement
